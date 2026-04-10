@@ -416,3 +416,12 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Vite / Node.js
+dist/
+dist-ssr/
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
