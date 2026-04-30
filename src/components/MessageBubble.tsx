@@ -3,16 +3,44 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import DOMPurify from 'dompurify'
 import { PayloadAction } from '../types/payload'
+import {
+  REASONING_TRACE_ACTION,
+  isEmptyTrace,
+  type ReasoningTraceMessage,
+} from '../types/reasoningStep'
 import type { ChatMessage } from '../types/agent'
+import { detectContentKind } from '../utils/contentDetect'
+import { GUIRenderer } from './GUIRenderer'
+import { ReasoningTrace } from './ReasoningTrace'
 
 interface MessageBubbleProps {
   message: ChatMessage
   onOptionSelect?: (option: string) => void
+  onUIInteract?: (eventJson: string) => void
 }
 
-export function MessageBubble({ message, onOptionSelect }: MessageBubbleProps) {
+export function MessageBubble({ message, onOptionSelect, onUIInteract }: MessageBubbleProps) {
   const { action, message: content, isUser, timestamp } = message
   const timeLabel = timestamp ?? null
+
+  // Reasoning traces use the standard agent message layout (so the width
+  // matches a regular agent bubble — timestamp slot + body), but the trace
+  // brings its own visual frame instead of going inside a chat bubble.
+  // Skip empty traces entirely — when the LLM answered directly without
+  // tools or tasks, the trace has zero observable steps and would render
+  // as a useless empty container.
+  if (!isUser && action === REASONING_TRACE_ACTION) {
+    const trace = content as ReasoningTraceMessage
+    if (isEmptyTrace(trace)) return null
+    return (
+      <div className="message message--agent message--reasoning">
+        {timeLabel && <span className="message__timestamp">{timeLabel}</span>}
+        <div className="message__body">
+          <ReasoningTrace trace={trace} />
+        </div>
+      </div>
+    )
+  }
 
   if (isUser) {
     if (action === PayloadAction.USER_VOICE) {
@@ -57,7 +85,7 @@ export function MessageBubble({ message, onOptionSelect }: MessageBubbleProps) {
       {timeLabel && <span className="message__timestamp">{timeLabel}</span>}
       <div className="message__body">
         <div className="message__bubble message__bubble--agent">
-          {renderContent(action, content, onOptionSelect)}
+          {renderContent(action, content, onOptionSelect, onUIInteract)}
         </div>
       </div>
     </div>
@@ -68,10 +96,28 @@ function renderContent(
   action: string,
   content: unknown,
   onOptionSelect?: (option: string) => void,
+  onUIInteract?: (eventJson: string) => void,
 ) {
   switch (action) {
-    case PayloadAction.AGENT_REPLY_STR:
-      return <p className="msg-text">{String(content)}</p>
+    case PayloadAction.AGENT_REPLY_STR: {
+      const text = String(content)
+      // BAF's reply() always sends agent_reply_str, but the LLM frequently
+      // produces Markdown or code. Sniff the content and pick a renderer.
+      const kind = detectContentKind(text)
+      if (kind === 'markdown') {
+        return (
+          <div className="msg-markdown">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+          </div>
+        )
+      }
+      if (kind === 'code') {
+        return (
+          <pre className="msg-code"><code>{text}</code></pre>
+        )
+      }
+      return <p className="msg-text">{text}</p>
+    }
 
     case PayloadAction.AGENT_REPLY_MARKDOWN:
       return (
@@ -118,6 +164,9 @@ function renderContent(
 
     case PayloadAction.AGENT_REPLY_AUDIO:
       return <AudioMessage content={content} />
+
+    case PayloadAction.AGENT_REPLY_UI:
+      return <GUIRenderer content={content} onInteract={onUIInteract} />
 
     default:
       return <p className="msg-text msg-text--muted">[Unsupported message type: {action}]</p>

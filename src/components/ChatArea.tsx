@@ -170,6 +170,10 @@ export function ChatArea({ messages, setMessages, status, send }: ChatAreaProps)
     send(PayloadAction.USER_MESSAGE, option)
   }
 
+  function handleUIInteract(eventJson: string) {
+    send(PayloadAction.USER_UPDATE_UI, eventJson)
+  }
+
   function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     if (files.length === 0) return
@@ -220,7 +224,7 @@ export function ChatArea({ messages, setMessages, status, send }: ChatAreaProps)
           </div>
         )}
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} onOptionSelect={handleOptionSelect} />
+          <MessageBubble key={msg.id} message={msg} onOptionSelect={handleOptionSelect} onUIInteract={handleUIInteract} />
         ))}
         <div ref={bottomRef} />
       </div>

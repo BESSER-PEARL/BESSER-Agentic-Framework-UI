@@ -3,6 +3,14 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { SessionSidebar } from './SessionSidebar'
 import { ChatArea } from './ChatArea'
 import { PayloadAction } from '../types/payload'
+import {
+  REASONING_TRACE_ACTION,
+  isReasoningEnd,
+  isReasoningStart,
+  type ReasoningStep,
+  type ReasoningTraceMessage,
+  type Task,
+} from '../types/reasoningStep'
 import type { Agent, ChatMessage } from '../types/agent'
 import type { SessionRecord } from '../services/db'
 
@@ -26,6 +34,113 @@ const STATUS_LABEL: Record<string, string> = {
   disconnected: 'Disconnected',
 }
 
+/**
+ * Fold an incoming reasoning step into the message list.
+ *
+ * - `reasoning_started` opens a new synthetic `reasoning_trace` ChatMessage
+ *   with `inProgress: true` and the bracket step as its first entry.
+ * - Subsequent steps append to the most recent in-progress trace.
+ * - `reasoning_finished` appends and flips `inProgress` to false so the UI
+ *   can collapse it.
+ *
+ * Defensive fallback: if a non-start step arrives without an open trace
+ * (history replay, reconnect, etc.) we open a new trace anyway so the step
+ * is never silently dropped.
+ */
+function appendReasoningStep(
+  prev: ChatMessage[],
+  step: ReasoningStep,
+  timestamp?: string,
+): ChatMessage[] {
+  if (isReasoningStart(step)) {
+    return [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        action: REASONING_TRACE_ACTION,
+        message: {
+          steps: [step],
+          tasks: [],
+          inProgress: true,
+        } satisfies ReasoningTraceMessage,
+        isUser: false,
+        timestamp,
+      },
+    ]
+  }
+
+  // Find the last in-progress trace and append to it.
+  for (let i = prev.length - 1; i >= 0; i--) {
+    const m = prev[i]
+    if (m.action !== REASONING_TRACE_ACTION) continue
+    const trace = m.message as ReasoningTraceMessage
+    if (!trace.inProgress) break  // last trace already closed; fall through to defensive new-trace branch
+    const next = [...prev]
+    next[i] = {
+      ...m,
+      message: {
+        steps: [...trace.steps, step],
+        tasks: trace.tasks,
+        inProgress: !isReasoningEnd(step),
+      } satisfies ReasoningTraceMessage,
+    }
+    return next
+  }
+
+  // No open trace — open one defensively (handles history replays / reconnects).
+  return [
+    ...prev,
+    {
+      id: crypto.randomUUID(),
+      action: REASONING_TRACE_ACTION,
+      message: {
+        steps: [step],
+        tasks: [],
+        inProgress: !isReasoningEnd(step),
+      } satisfies ReasoningTraceMessage,
+      isUser: false,
+      timestamp,
+    },
+  ]
+}
+
+/**
+ * Replace the task list of the most recent in-progress reasoning trace.
+ *
+ * Each task_list_update payload carries the *full* current snapshot, so the
+ * UI just swaps the trace's `tasks` array. If no in-progress trace exists
+ * (history replay, late reconnect), open one defensively so the snapshot is
+ * still visible to the user.
+ */
+function applyTaskListUpdate(
+  prev: ChatMessage[],
+  tasks: Task[],
+  timestamp?: string,
+): ChatMessage[] {
+  for (let i = prev.length - 1; i >= 0; i--) {
+    const m = prev[i]
+    if (m.action !== REASONING_TRACE_ACTION) continue
+    const trace = m.message as ReasoningTraceMessage
+    if (!trace.inProgress) break
+    const next = [...prev]
+    next[i] = {
+      ...m,
+      message: { ...trace, tasks } satisfies ReasoningTraceMessage,
+    }
+    return next
+  }
+  return [
+    ...prev,
+    {
+      id: crypto.randomUUID(),
+      action: REASONING_TRACE_ACTION,
+      message: { steps: [], tasks, inProgress: true } satisfies ReasoningTraceMessage,
+      isUser: false,
+      timestamp,
+    },
+  ]
+}
+
 export function ChatLayout({ agent, username, onBack }: ChatLayoutProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null)
@@ -45,6 +160,14 @@ export function ChatLayout({ agent, username, onBack }: ChatLayoutProps) {
 
   const { status, send } = useWebSocket(wsUrl, {
     onMessage: (payload) => {
+      if (payload.action === PayloadAction.AGENT_REPLY_REASONING_STEP) {
+        setMessages((prev) => appendReasoningStep(prev, payload.message as ReasoningStep, payload.timestamp))
+        return
+      }
+      if (payload.action === PayloadAction.AGENT_REPLY_TASK_LIST_UPDATE) {
+        setMessages((prev) => applyTaskListUpdate(prev, payload.message as Task[], payload.timestamp))
+        return
+      }
       setMessages((prev) => [
         ...prev,
         {
@@ -57,6 +180,14 @@ export function ChatLayout({ agent, username, onBack }: ChatLayoutProps) {
       ])
     },
     onHistoryMessage: (payload) => {
+      if (payload.action === PayloadAction.AGENT_REPLY_REASONING_STEP) {
+        setMessages((prev) => appendReasoningStep(prev, payload.message as ReasoningStep, payload.timestamp))
+        return
+      }
+      if (payload.action === PayloadAction.AGENT_REPLY_TASK_LIST_UPDATE) {
+        setMessages((prev) => applyTaskListUpdate(prev, payload.message as Task[], payload.timestamp))
+        return
+      }
       const isUser = payload.action === PayloadAction.USER_MESSAGE ||
         payload.action === PayloadAction.USER_VOICE ||
         payload.action === PayloadAction.USER_FILE

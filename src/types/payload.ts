@@ -14,7 +14,11 @@ export const PayloadAction = {
   AGENT_REPLY_OPTIONS: 'agent_reply_options',
   AGENT_REPLY_LOCATION: 'agent_reply_location',
   AGENT_REPLY_RAG: 'agent_reply_rag',
+  AGENT_REPLY_REASONING_STEP: 'agent_reply_reasoning_step',
+  AGENT_REPLY_TASK_LIST_UPDATE: 'agent_reply_task_list_update',
   AGENT_REPLY_AUDIO: 'agent_reply_audio',
+  AGENT_REPLY_UI: 'agent_reply_ui',
+  USER_UPDATE_UI: 'user_update_ui',
   FETCH_USER_MESSAGES: 'fetch_user_messages',
 } as const
 
