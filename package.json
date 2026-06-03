@@ -1,31 +1,55 @@
 {
   "name": "besser-agentic-framework-ui",
-  "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "React chat UI components for the BESSER Agentic Framework",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BESSER-PEARL/BESSER-Agentic-Framework-UI.git"
+  },
   "type": "module",
+  "files": ["dist"],
+  "main": "./dist/besser-agentic-framework-ui.js",
+  "module": "./dist/besser-agentic-framework-ui.js",
+  "types": "./dist/lib.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/besser-agentic-framework-ui.js",
+      "types": "./dist/lib.d.ts"
+    },
+    "./style.css": "./dist/style.css"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:lib": "vite build --config vite.config.lib.ts && tsc --project tsconfig.lib.json",
     "lint": "eslint .",
     "preview": "vite preview"
   },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "react-markdown": ">=9",
+    "remark-gfm": ">=3",
+    "dompurify": ">=3",
+    "plotly.js-dist-min": ">=2"
+  },
+  "peerDependenciesMeta": {
+    "plotly.js-dist-min": {
+      "optional": true
+    }
+  },
   "dependencies": {
-    "@types/dompurify": "^3.0.5",
     "cors": "^2.8.6",
-    "dompurify": "^3.3.3",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
     "pg": "^8.20.0",
-    "plotly.js-dist-min": "^3.5.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1",
     "ws": "^8.20.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@types/cors": "^2.8.19",
+    "@types/dompurify": "^3.0.5",
     "@types/express": "^5.0.6",
     "@types/node": "^24.12.2",
     "@types/pg": "^8.20.0",
@@ -34,10 +58,16 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^9.2.1",
+    "dompurify": "^3.3.3",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
+    "plotly.js-dist-min": "^3.5.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.0",
     "vite": "^8.0.4"

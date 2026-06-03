@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "skipLibCheck": true,
+    "declaration": true,
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": [
+    "src/lib.ts",
+    "src/components/ChatArea.tsx",
+    "src/components/MessageBubble.tsx",
+    "src/components/ReasoningTrace.tsx",
+    "src/components/GUIRenderer.tsx",
+    "src/hooks/useWebSocket.ts",
+    "src/types/agent.ts",
+    "src/types/payload.ts",
+    "src/types/reasoningStep.ts",
+    "src/utils/contentDetect.ts",
+    "src/types/plotly-dist.d.ts"
+  ]
+}
