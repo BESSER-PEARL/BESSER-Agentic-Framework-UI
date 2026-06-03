@@ -165,6 +165,32 @@ function TaskListPanel({ tasks }: { tasks: Task[] }) {
 
 // ─── Step trace (grouped by step number) ─────────────────────────────── //
 
+type EventItem =
+  | { type: 'single'; step: ReasoningStep }
+  | { type: 'tool_result_group'; steps: ReasoningStep[] }
+
+function groupConsecutiveToolResults(events: ReasoningStep[]): EventItem[] {
+  const result: EventItem[] = []
+  let i = 0
+  while (i < events.length) {
+    if (events[i].kind === ReasoningStepKind.TOOL_RESULT) {
+      let j = i
+      while (j < events.length && events[j].kind === ReasoningStepKind.TOOL_RESULT) j++
+      const run = events.slice(i, j)
+      if (run.length > 2) {
+        result.push({ type: 'tool_result_group', steps: run })
+      } else {
+        for (const s of run) result.push({ type: 'single', step: s })
+      }
+      i = j
+    } else {
+      result.push({ type: 'single', step: events[i] })
+      i++
+    }
+  }
+  return result
+}
+
 function StepTrace({ steps }: { steps: ReasoningStep[] }) {
   // Group by step number, preserving order. Two consecutive steps with the
   // same number land in the same group; a different number opens a new group.
@@ -191,9 +217,11 @@ function StepTrace({ steps }: { steps: ReasoningStep[] }) {
             STEP {i}
           </div>
           <ol className="reasoning-trace__step-list">
-            {g.events.map((ev, j) => (
-              <ReasoningStepLine key={j} step={ev} />
-            ))}
+            {groupConsecutiveToolResults(g.events).map((item, j) =>
+              item.type === 'tool_result_group'
+                ? <ToolResultGroup key={j} steps={item.steps} />
+                : <ReasoningStepLine key={j} step={item.step} />
+            )}
           </ol>
         </div>
       ))}
@@ -210,6 +238,39 @@ const KIND_ICON: Record<string, string> = {
   [ReasoningStepKind.TASK_SKIPPED]: '⏭️',
   [ReasoningStepKind.PUSHBACK]: '↩️',
   [ReasoningStepKind.MAX_STEPS]: '⏱️',
+}
+
+function ToolResultGroup({ steps }: { steps: ReasoningStep[] }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <li className="reasoning-trace__step">
+      <button
+        type="button"
+        className="reasoning-trace__step-line"
+        onClick={() => setOpen((o) => !o)}
+        title="Click to expand tool results"
+      >
+        <span className="reasoning-trace__step-icon" aria-hidden>📥</span>
+        <span className="reasoning-trace__step-summary">
+          Completed {steps.length} tool calls
+        </span>
+        <span
+          className="reasoning-trace__step-chevron"
+          aria-hidden
+          style={{ fontSize: '0.65rem', transition: 'transform 0.2s ease', transform: open ? 'rotate(90deg)' : 'none' }}
+        >
+          ▶
+        </span>
+      </button>
+      {open && (
+        <ol className="reasoning-trace__step-list reasoning-trace__step-list--nested">
+          {steps.map((s, i) => (
+            <ReasoningStepLine key={i} step={s} />
+          ))}
+        </ol>
+      )}
+    </li>
+  )
 }
 
 function ReasoningStepLine({ step }: { step: ReasoningStep }) {
