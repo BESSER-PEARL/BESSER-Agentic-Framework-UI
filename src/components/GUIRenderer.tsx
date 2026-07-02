@@ -72,6 +72,17 @@ interface ViewElement {
   source?: string
   // InputField
   field_type?: string
+  placeholder?: string
+  required?: boolean
+  default_value?: unknown
+  options?: Array<{ label: string; value: string }>
+  min_value?: number
+  max_value?: number
+  step?: number
+  help_text?: string
+  disabled?: boolean
+  readonly?: boolean
+  multiple?: boolean
   validationRules?: string
   // Form
   inputFields?: ViewElement[]
@@ -464,6 +475,465 @@ function AlertElement({ el, id, className, style }: { el: ViewElement; id?: stri
   )
 }
 
+// ─── InputField specialized sub-renderers ────────────────────────────────────
+
+function ToggleInput({ el, id, onInteract }: { el: ViewElement; id?: string; onInteract?: (json: string) => void }) {
+  const [checked, setChecked] = useState<boolean>(Boolean(el.default_value))
+  return (
+    <div style={{ marginBottom: '4px' }}>
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: el.disabled ? 'default' : 'pointer', userSelect: 'none' }}>
+      {el.label && <span style={{ fontSize: '0.875em', fontWeight: 500, color: '#374151' }}>{el.label}</span>}
+      <span style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px', flexShrink: 0 }}>
+        <input
+          type="checkbox"
+          id={id}
+          name={el.name}
+          checked={checked}
+          disabled={el.disabled}
+          style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }}
+          onChange={(e) => {
+            setChecked(e.target.checked)
+            onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, fieldType: el.field_type, label: el.label || undefined, action: 'onChange', value: e.target.checked }))
+          }}
+        />
+        <span style={{ position: 'absolute', inset: 0, background: checked ? '#2563eb' : '#cbd5e1', borderRadius: '24px', transition: 'background 0.2s', pointerEvents: 'none' }} />
+        <span style={{ position: 'absolute', top: '3px', left: checked ? '23px' : '3px', width: '18px', height: '18px', borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', pointerEvents: 'none' }} />
+      </span>
+    </label>
+    </div>
+  )
+}
+
+function SliderInput({ el, id, onInteract }: { el: ViewElement; id?: string; onInteract?: (json: string) => void }) {
+  const init = typeof el.default_value === 'number' ? el.default_value : (el.min_value ?? 0)
+  const [value, setValue] = useState<number>(init)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <input
+        type="range"
+        id={id}
+        name={el.name}
+        min={el.min_value ?? 0}
+        max={el.max_value ?? 100}
+        step={el.step ?? 1}
+        value={value}
+        disabled={el.disabled}
+        style={{ flex: 1 }}
+        onChange={(e) => {
+          const v = Number(e.target.value)
+          setValue(v)
+          onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, fieldType: el.field_type, label: el.label || undefined, action: 'onChange', value: v }))
+        }}
+      />
+      <span style={{ minWidth: '2.5em', textAlign: 'right', fontSize: '0.875em', color: '#374151' }}>{value}</span>
+    </div>
+  )
+}
+
+function RatingInput({ el, id, className, onInteract }: { el: ViewElement; id?: string; className?: string; onInteract?: (json: string) => void }) {
+  const [rating, setRating] = useState<number>(typeof el.default_value === 'number' ? el.default_value : 0)
+  const [hover, setHover] = useState<number>(0)
+  const maxStars = el.max_value ?? 5
+  return (
+    <div id={id} className={className} style={{ display: 'flex', gap: '2px' }}>
+      {Array.from({ length: maxStars }, (_, i) => i + 1).map((star) => (
+        <button
+          key={star}
+          type="button"
+          aria-label={`${star} star${star !== 1 ? 's' : ''}`}
+          style={{ background: 'none', border: 'none', padding: '0 2px', cursor: el.disabled ? 'default' : 'pointer', fontSize: '1.5em', color: star <= (hover || rating) ? '#f59e0b' : '#d1d5db', transition: 'color 0.1s' }}
+          disabled={el.disabled}
+          onClick={() => {
+            const v = star === rating ? 0 : star
+            setRating(v)
+            onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, fieldType: el.field_type, label: el.label || undefined, action: 'onChange', value: v }))
+          }}
+          onMouseEnter={() => !el.disabled && setHover(star)}
+          onMouseLeave={() => setHover(0)}
+        >★</button>
+      ))}
+    </div>
+  )
+}
+
+function TagsInput({ el, id, className, onInteract }: { el: ViewElement; id?: string; className?: string; onInteract?: (json: string) => void }) {
+  const [tags, setTags] = useState<string[]>([])
+  const [inputValue, setInputValue] = useState('')
+
+  const addTag = (raw: string) => {
+    const tag = raw.trim()
+    if (tag && !tags.includes(tag)) {
+      const next = [...tags, tag]
+      setTags(next)
+      onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, fieldType: el.field_type, label: el.label || undefined, action: 'onChange', value: next }))
+    }
+    setInputValue('')
+  }
+
+  const removeTag = (tag: string) => {
+    const next = tags.filter((t) => t !== tag)
+    setTags(next)
+    onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, fieldType: el.field_type, label: el.label || undefined, action: 'onChange', value: next }))
+  }
+
+  return (
+    <div id={id} className={className} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', minHeight: '38px' }}>
+      {tags.map((tag) => (
+        <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '12px', fontSize: '0.82em' }}>
+          {tag}
+          <button type="button" onClick={() => removeTag(tag)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1 }}>×</button>
+        </span>
+      ))}
+      <input
+        type="text"
+        value={inputValue}
+        placeholder={tags.length === 0 ? (el.placeholder ?? el.description ?? 'Add tags…') : undefined}
+        disabled={el.disabled}
+        style={{ border: 'none', outline: 'none', fontFamily: 'inherit', fontSize: 'inherit', flex: '1 1 80px', minWidth: '80px', padding: '2px 0' }}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(inputValue) }
+          if (e.key === 'Backspace' && !inputValue && tags.length) removeTag(tags[tags.length - 1])
+        }}
+        onBlur={() => { if (inputValue) addTag(inputValue) }}
+      />
+    </div>
+  )
+}
+
+function OTPInput({ el, id, className, onInteract }: { el: ViewElement; id?: string; className?: string; onInteract?: (json: string) => void }) {
+  const length = Math.max(2, Math.min(8, el.max_value ?? 6))
+  const [values, setValues] = useState<string[]>(() => Array(length).fill(''))
+  const refs = useRef<Array<HTMLInputElement | null>>(Array(length).fill(null))
+
+  const handleChange = (index: number, raw: string) => {
+    const digit = raw.replace(/\D/g, '').slice(-1)
+    const next = [...values]
+    next[index] = digit
+    setValues(next)
+    onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, fieldType: el.field_type, label: el.label || undefined, action: 'onChange', value: next.join('') }))
+    if (digit && index < length - 1) refs.current[index + 1]?.focus()
+  }
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !values[index] && index > 0) refs.current[index - 1]?.focus()
+  }
+
+  return (
+    <div id={id} className={className} style={{ display: 'flex', gap: '8px' }}>
+      {values.map((v, i) => (
+        <input
+          key={i}
+          ref={(r) => { refs.current[i] = r }}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={v}
+          disabled={el.disabled}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          style={{ width: '40px', height: '44px', textAlign: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '1.25em', fontFamily: 'inherit' }}
+        />
+      ))}
+    </div>
+  )
+}
+
+function DateRangeInput({ el, id, className, onInteract }: { el: ViewElement; id?: string; className?: string; onInteract?: (json: string) => void }) {
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const dateStyle: React.CSSProperties = { padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '4px', fontFamily: 'inherit' }
+  const emit = (f: string, t: string) =>
+    onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, fieldType: el.field_type, label: el.label || undefined, action: 'onChange', value: { from: f, to: t } }))
+  return (
+    <div id={id} className={className} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      <input type="date" value={from} max={to || undefined} disabled={el.disabled} style={dateStyle}
+        onChange={(e) => { setFrom(e.target.value); emit(e.target.value, to) }} />
+      <span style={{ color: '#94a3b8', fontSize: '0.9em' }}>to</span>
+      <input type="date" value={to} min={from || undefined} disabled={el.disabled} style={dateStyle}
+        onChange={(e) => { setTo(e.target.value); emit(from, e.target.value) }} />
+    </div>
+  )
+}
+
+function MultiSelectInput({ el, id, className, onInteract }: { el: ViewElement; id?: string; className?: string; onInteract?: (json: string) => void }) {
+  const options = (el.options ?? []) as Array<{ label: string; value: string }>
+  const [selected, setSelected] = useState<string[]>(() => {
+    if (typeof el.default_value === 'string' && el.default_value) {
+      return el.default_value.split(',').map((s) => s.trim()).filter(Boolean)
+    }
+    return []
+  })
+
+  const toggle = (value: string) => {
+    const next = selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]
+    setSelected(next)
+    onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, fieldType: el.field_type, label: el.label || undefined, action: 'onChange', value: next }))
+  }
+
+  return (
+    <div id={id} className={className} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      {selected.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          {selected.map((val) => {
+            const opt = options.find((o) => o.value === val)
+            return (
+              <span key={val} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '12px', fontSize: '0.82em' }}>
+                {opt?.label ?? val}
+                <button type="button" onClick={() => toggle(val)} disabled={el.disabled}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1 }}>×</button>
+              </span>
+            )
+          })}
+        </div>
+      )}
+      <div style={{ border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden' }}>
+        {options.map((o, i) => {
+          const isSelected = selected.includes(o.value)
+          return (
+            <div key={i} onClick={() => !el.disabled && toggle(o.value)}
+              style={{
+                padding: '6px 10px', cursor: el.disabled ? 'default' : 'pointer',
+                background: isSelected ? '#dbeafe' : (i % 2 === 0 ? '#fff' : '#f8fafc'),
+                color: isSelected ? '#1d4ed8' : '#374151', fontWeight: isSelected ? 500 : 400,
+                borderBottom: i < options.length - 1 ? '1px solid #e2e8f0' : 'none',
+                userSelect: 'none' as const,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}
+            >
+              <span>{o.label}</span>
+              {isSelected && <span style={{ color: '#2563eb', fontWeight: 700 }}>✓</span>}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── InputField element (dispatches per field_type) ──────────────────────────
+
+const _FT_TO_HTML: Record<string, string> = {
+  Text: 'text', Password: 'password', Email: 'email', Number: 'number',
+  Date: 'date', Time: 'time', Color: 'color', File: 'file',
+  Search: 'search', URL: 'url', Tel: 'tel', Hidden: 'hidden',
+  Range: 'range', Checkbox: 'checkbox',
+}
+
+function InputFieldElement({ el, onInteract }: { el: ViewElement; onInteract?: (json: string) => void }) {
+  // Resolve fields from el directly, falling back to custom_attributes for
+  // backward-compatibility with models exported before the pipeline fix.
+  const ca = el.custom_attributes ?? {}
+  const label = el.label ?? (ca['data-label'] as string | undefined) ?? undefined
+  const resolvedPlaceholder = el.placeholder ?? (ca['data-placeholder'] as string | undefined) ?? el.description ?? el.name
+  const required = el.required ?? (ca['data-required'] === 'true') ?? false
+  const minValue = el.min_value ?? (ca['data-min'] != null ? Number(ca['data-min']) : undefined)
+  const maxValue = el.max_value ?? (ca['data-max'] != null ? Number(ca['data-max']) : undefined)
+  const stepValue = el.step ?? (ca['data-step'] != null ? Number(ca['data-step']) : undefined)
+
+  // default_value fallback: for Toggle, 'data-default-checked' holds a boolean string
+  let defaultValue: unknown = el.default_value
+  if (defaultValue == null && ca['data-default-checked'] != null) {
+    defaultValue = String(ca['data-default-checked']).toLowerCase() === 'true'
+  }
+
+  // options fallback: parse comma-separated 'data-options' string
+  let options = (el.options ?? []) as Array<{ label: string; value: string }>
+  if (options.length === 0 && ca['data-options']) {
+    const raw = String(ca['data-options'])
+    options = raw.split(',').map((s) => s.trim()).filter(Boolean).map((s) => ({ label: s, value: s }))
+  }
+
+  // Build a resolved element for sub-components that need the enriched fields
+  const resolved: ViewElement = {
+    ...el,
+    label,
+    placeholder: resolvedPlaceholder,
+    required,
+    min_value: minValue,
+    max_value: maxValue,
+    step: stepValue,
+    default_value: defaultValue,
+    options,
+  }
+
+  const style = stylingToReact(el.styling)
+  const id = el.component_id ?? undefined
+  const className = (el.css_classes ?? []).join(' ') || undefined
+  const ft = el.field_type ?? 'Text'
+  const placeholder = resolvedPlaceholder
+  const disabled = el.disabled ?? false
+  const readonly = el.readonly ?? false
+
+  const inputStyle: React.CSSProperties = {
+    padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '4px',
+    fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const,
+    ...style,
+  }
+
+  const emit = (value: unknown) =>
+    onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, fieldType: ft, label: label || undefined, action: 'onChange', value }))
+
+  const wrap = (input: React.ReactNode): React.ReactElement => {
+    if (!label) return <>{input}</>
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <label htmlFor={id} style={{ fontSize: '0.875em', fontWeight: 500, color: '#374151' }}>
+          {label}{required && <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>}
+        </label>
+        {input}
+      </div>
+    )
+  }
+
+  switch (ft) {
+    case 'TextArea':
+    case 'RichText':
+      return wrap(
+        <textarea id={id} name={el.name} className={className}
+          style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }}
+          placeholder={placeholder} required={required} disabled={disabled} readOnly={readonly}
+          defaultValue={defaultValue as string | undefined}
+          onBlur={(e) => emit(e.target.value)} />
+      )
+
+    case 'Dropdown':
+      return wrap(
+        <select id={id} name={el.name} className={className} style={inputStyle}
+          required={required} disabled={disabled}
+          defaultValue={defaultValue as string | undefined}
+          onChange={(e) => emit(e.target.value)}
+        >
+          <option value="">— Select —</option>
+          {options.map((o, i) => <option key={i} value={o.value}>{o.label}</option>)}
+        </select>
+      )
+
+    case 'MultiSelect':
+      return wrap(<MultiSelectInput el={resolved} id={id} className={className} onInteract={onInteract} />)
+
+    case 'RadioGroup':
+      return wrap(
+        <div role="radiogroup" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {options.map((o, i) => (
+            <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: disabled ? 'default' : 'pointer' }}>
+              <input type="radio" name={el.name} value={o.value} required={required} disabled={disabled}
+                onChange={() => emit(o.value)} />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      )
+
+    case 'CheckboxGroup':
+      return wrap(
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {options.map((o, i) => (
+            <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: disabled ? 'default' : 'pointer' }}>
+              <input type="checkbox" name={`${el.name}[]`} value={o.value} disabled={disabled}
+                onChange={(e) => emit({ option: o.value, checked: e.target.checked })} />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      )
+
+    case 'Toggle':
+      // ToggleInput already renders the label inline beside the switch;
+      // wrapping would produce a second label above it.
+      return <ToggleInput el={resolved} id={id} onInteract={onInteract} />
+
+    case 'Slider':
+      return wrap(<SliderInput el={resolved} id={id} onInteract={onInteract} />)
+
+    case 'Spinner':
+      return wrap(
+        <input type="number" id={id} name={el.name} className={className} style={inputStyle}
+          placeholder={placeholder} required={required} disabled={disabled} readOnly={readonly}
+          min={minValue} max={maxValue} step={stepValue ?? 1}
+          defaultValue={defaultValue as number | undefined}
+          onBlur={(e) => emit(Number(e.target.value))} />
+      )
+
+    case 'Rating':
+      return wrap(<RatingInput el={resolved} id={id} className={className} onInteract={onInteract} />)
+
+    case 'Tags':
+      return wrap(<TagsInput el={resolved} id={id} className={className} onInteract={onInteract} />)
+
+    case 'OTP':
+      return wrap(<OTPInput el={resolved} id={id} className={className} onInteract={onInteract} />)
+
+    case 'DateRange':
+      return wrap(<DateRangeInput el={resolved} id={id} className={className} onInteract={onInteract} />)
+
+    case 'DateTime':
+      return wrap(
+        <input type="datetime-local" id={id} name={el.name} className={className} style={inputStyle}
+          required={required} disabled={disabled} readOnly={readonly}
+          defaultValue={defaultValue as string | undefined}
+          onBlur={(e) => emit(e.target.value)} />
+      )
+
+    case 'Color':
+      return wrap(
+        <input type="color" id={id} name={el.name} className={className}
+          style={{ width: '48px', height: '36px', padding: '2px', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: disabled ? 'default' : 'pointer' }}
+          disabled={disabled}
+          defaultValue={(defaultValue as string | undefined) || '#000000'}
+          onChange={(e) => emit(e.target.value)} />
+      )
+
+    case 'Checkbox':
+      return (
+        <div style={style}>
+          <label htmlFor={id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: disabled ? 'default' : 'pointer', userSelect: 'none' as const, fontSize: '0.875em', fontWeight: 500, color: '#374151' }}>
+            <input type="checkbox" id={id} name={el.name} className={className}
+              required={required} disabled={disabled}
+              defaultChecked={Boolean(defaultValue)}
+              onChange={(e) => emit(e.target.checked)} />
+            {label && <span>{label}{required && <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>}</span>}
+          </label>
+        </div>
+      )
+
+    case 'File': {
+      const accept = (ca['data-accept'] as string | undefined) || undefined
+      const isMultiple = el.multiple === true || ca['data-multiple'] === 'true'
+      return wrap(
+        <input type="file" id={id} name={el.name} className={className} style={inputStyle}
+          required={required} disabled={disabled}
+          accept={accept}
+          multiple={isMultiple}
+          onChange={(e) => {
+            const files = e.target.files
+            if (!files || files.length === 0) { emit(null); return }
+            const names = Array.from(files).map((f) => f.name)
+            emit(isMultiple ? names : names[0])
+          }} />
+      )
+    }
+
+    case 'ImageUpload':
+      return wrap(
+        <input type="file" id={id} name={el.name} className={className} style={inputStyle}
+          required={required} disabled={disabled} accept="image/*"
+          onChange={(e) => emit(e.target.files?.[0]?.name)} />
+      )
+
+    default: {
+      const htmlType = _FT_TO_HTML[ft] ?? ft.toLowerCase()
+      return wrap(
+        <input type={htmlType} id={id} name={el.name} className={className} style={inputStyle}
+          placeholder={placeholder} required={required} disabled={disabled} readOnly={readonly}
+          min={minValue} max={maxValue} step={stepValue}
+          defaultValue={defaultValue as string | undefined}
+          onBlur={(e) => emit(e.target.value)} />
+      )
+    }
+  }
+}
+
 // ─── Embedded chat widget ─────────────────────────────────────────────────────
 
 function EmbeddedChatWidget({ el, id, className, style }: { el: ViewElement; id?: string; className?: string; style?: React.CSSProperties }) {
@@ -537,7 +1007,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
             if (el.url && navigateTo?.(el.url)) {
               e.preventDefault()
             } else {
-              onInteract?.(JSON.stringify({ elementId: id ?? el.name, action: 'onClick', value: el.url }))
+              onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, label: el.label || undefined, action: 'onClick', value: el.url }))
             }
           }}
         >
@@ -558,7 +1028,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
           onClick={() => {
             // actionType comes serialized as "Navigate" (capital N)
             if (el.actionType?.toLowerCase() === 'navigate' && el.url && navigateTo?.(el.url)) return
-            onInteract?.(JSON.stringify({ elementId: id ?? el.name, action: 'onClick' }))
+            onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, label: el.label || undefined, actionType: el.actionType || undefined, action: 'onClick' }))
           }}
         >
           {el.label}
@@ -579,18 +1049,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
       )
 
     case 'InputField':
-      return (
-        <input
-          key={el.name}
-          id={id}
-          name={el.name}
-          className={className}
-          style={{ padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '4px', fontFamily: 'inherit', ...style }}
-          type={(el.field_type ?? 'text').toLowerCase()}
-          placeholder={el.description || el.name}
-          onBlur={(e) => onInteract?.(JSON.stringify({ elementId: id ?? el.name, action: 'onChange', value: e.target.value }))}
-        />
-      )
+      return <InputFieldElement key={el.name} el={el} onInteract={onInteract} />
 
     case 'Form':
       return (
@@ -602,7 +1061,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
           onSubmit={(e) => {
             e.preventDefault()
             const data = Object.fromEntries(new FormData(e.currentTarget))
-            onInteract?.(JSON.stringify({ elementId: id ?? el.name, action: 'onSubmit', value: data }))
+            onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, action: 'onSubmit', value: data }))
           }}
         >
           {(el.inputFields ?? []).map((f) => renderElement(f, onInteract, navigateTo))}
@@ -626,7 +1085,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
                     if (item.url && navigateTo?.(item.url)) {
                       e.preventDefault()
                     } else {
-                      onInteract?.(JSON.stringify({ elementId: el.component_id ?? el.name, action: 'onClick', value: item.url }))
+                      onInteract?.(JSON.stringify({ elementId: el.component_id ?? el.name, name: el.name, label: item.label, action: 'onClick', value: item.url }))
                     }
                   }}
                 >
