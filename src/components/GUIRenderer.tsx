@@ -1,4 +1,8 @@
-import { useState, useId, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useId, useMemo, useEffect, useRef, useCallback, createContext, useContext } from 'react'
+import type { ChatMessage } from '../types/agent'
+import { PayloadAction } from '../types/payload'
+import type { ConnectionStatus } from '../hooks/useWebSocket'
+import { ChatArea } from './ChatArea'
 
 // ─── JSON model types ──────────────────────────────────────────────────────
 
@@ -107,6 +111,9 @@ interface ViewElement {
   metric_title?: string
   format?: string
   value_color?: string
+  // Alert
+  severity?: 'info' | 'success' | 'warning' | 'error'
+  dismissible?: boolean
   // AgentComponent
   agent_name?: string
   agent_title?: string
@@ -131,10 +138,26 @@ interface GUIData {
   style_entries?: StyleEntry[]
 }
 
+// ─── Embedded chat widget context ────────────────────────────────────────────
+
+interface ChatWidgetProps {
+  messages: ChatMessage[]
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>
+  send: (action: string, message: unknown) => void
+  status: ConnectionStatus | string
+}
+
+const ChatWidgetContext = createContext<ChatWidgetProps | null>(null)
+
 // ─── Style conversion ────────────────────────────────────────────────────────
 
 function snakeToCamel(s: string): string {
   return s.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
+}
+
+// Strip `!important` from values — inline styles don't support it.
+function stripImportant(v: string): string {
+  return v.replace(/\s*!important\s*$/, '')
 }
 
 const SIZE_SKIP = new Set(['unit_size', 'icon_size'])
@@ -143,8 +166,9 @@ const COLOR_REMAP: Record<string, string> = {
   background_color: 'background',
   text_color: 'color',
 }
-const LAYOUT_SKIP = new Set(['layout_type'])
-const POS_SKIP = new Set(['p_type', 'alignment'])
+// 'alignment' removed from LAYOUT_SKIP: handled per-section below
+const LAYOUT_SKIP = new Set(['layout_type', 'alignment'])
+const POS_SKIP = new Set(['p_type'])  // 'alignment' removed — mapped to textAlign below
 
 function stylingToReact(styling?: StylingNode): React.CSSProperties {
   if (!styling) return {}
@@ -153,14 +177,17 @@ function stylingToReact(styling?: StylingNode): React.CSSProperties {
   if (styling.size) {
     for (const [k, v] of Object.entries(styling.size)) {
       if (!v || SIZE_SKIP.has(k)) continue
-      s[snakeToCamel(k)] = v
+      s[snakeToCamel(k)] = typeof v === 'string' ? stripImportant(v) : v
     }
   }
 
   if (styling.position) {
     for (const [k, v] of Object.entries(styling.position)) {
       if (!v || POS_SKIP.has(k)) continue
-      if (k === 'display') {
+      if (k === 'alignment') {
+        // GrapesJS alignment → CSS text-align
+        s['textAlign'] = typeof v === 'string' ? stripImportant(v) : v
+      } else if (k === 'display') {
         // GrapesJS uses display:table / table-cell for column layouts.
         // Remap to flexbox so they render correctly inside a chat bubble.
         if (v === 'table' || v === 'table-row') {
@@ -173,10 +200,10 @@ function stylingToReact(styling?: StylingNode): React.CSSProperties {
           s['flexDirection'] = 'column'
           s['height'] = 'auto'
         } else {
-          s['display'] = v
+          s['display'] = typeof v === 'string' ? stripImportant(v) : v
         }
       } else {
-        s[snakeToCamel(k)] = v
+        s[snakeToCamel(k)] = typeof v === 'string' ? stripImportant(v) : v
       }
     }
   }
@@ -184,7 +211,7 @@ function stylingToReact(styling?: StylingNode): React.CSSProperties {
   if (styling.color) {
     for (const [k, v] of Object.entries(styling.color)) {
       if (!v || COLOR_SKIP.has(k)) continue
-      s[COLOR_REMAP[k] ?? snakeToCamel(k)] = v
+      s[COLOR_REMAP[k] ?? snakeToCamel(k)] = typeof v === 'string' ? stripImportant(v) : v
     }
   }
 
@@ -195,7 +222,7 @@ function stylingToReact(styling?: StylingNode): React.CSSProperties {
     else if (lt === 'grid') s['display'] = 'grid'
     for (const [k, v] of Object.entries(styling.layout)) {
       if (!v || LAYOUT_SKIP.has(k)) continue
-      s[snakeToCamel(k)] = v
+      s[snakeToCamel(k)] = typeof v === 'string' ? stripImportant(v) : v
     }
   }
 
@@ -343,6 +370,23 @@ function buildPlotlyFigure(el: ViewElement): { traces: object[]; layout: object 
   }
 }
 
+// Module-level Plotly cache — eliminates the async race between newPlot and purge.
+// After first load the module is synchronously available for cleanup.
+type PlotlyModule = typeof import('plotly.js-dist-min')
+let _plotlyModule: PlotlyModule | null = null
+let _plotlyPromise: Promise<PlotlyModule> | null = null
+
+function loadPlotly(): Promise<PlotlyModule> {
+  if (_plotlyModule) return Promise.resolve(_plotlyModule)
+  if (!_plotlyPromise) {
+    _plotlyPromise = import('plotly.js-dist-min').then((m) => {
+      _plotlyModule = m
+      return m
+    })
+  }
+  return _plotlyPromise
+}
+
 function PlotlyGUIChart({ el }: { el: ViewElement }) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -351,13 +395,19 @@ function PlotlyGUIChart({ el }: { el: ViewElement }) {
     if (!node) return
     let active = true
     const { traces, layout } = buildPlotlyFigure(el)
-    import('plotly.js-dist-min').then((Plotly) => {
+    loadPlotly().then((Plotly) => {
       if (!active || !node) return
-      Plotly.newPlot(node, traces, layout, { responsive: true, displayModeBar: false })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      Plotly.newPlot(node, traces as any, layout as any, { responsive: true, displayModeBar: false })
     })
     return () => {
       active = false
-      import('plotly.js-dist-min').then((Plotly) => { if (node) Plotly.purge(node) })
+      // Synchronous purge when Plotly is already loaded; async fallback otherwise.
+      if (_plotlyModule && node) {
+        _plotlyModule.purge(node)
+      } else if (_plotlyPromise) {
+        _plotlyPromise.then((P) => { if (node) P.purge(node) })
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [el.name, el.type])
@@ -373,6 +423,87 @@ function PlotlyGUIChart({ el }: { el: ViewElement }) {
   )
 }
 
+// ─── Alert element (needs own component for dismissible state) ────────────────
+
+const _ALERT_COLORS: Record<string, { bg: string; border: string; text: string; icon: string }> = {
+  info:    { bg: '#eff6ff', border: '#bfdbfe', text: '#1e40af', icon: 'ℹ' },
+  success: { bg: '#f0fdf4', border: '#bbf7d0', text: '#166534', icon: '✓' },
+  warning: { bg: '#fffbeb', border: '#fde68a', text: '#92400e', icon: '⚠' },
+  error:   { bg: '#fef2f2', border: '#fecaca', text: '#991b1b', icon: '✕' },
+}
+
+function AlertElement({ el, id, className, style }: { el: ViewElement; id?: string; className?: string; style?: React.CSSProperties }) {
+  const [dismissed, setDismissed] = useState(false)
+  if (dismissed) return null
+  const colors = _ALERT_COLORS[el.severity ?? 'info'] ?? _ALERT_COLORS.info
+  return (
+    <div
+      id={id}
+      className={className}
+      role="alert"
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: '10px',
+        padding: '10px 14px', borderRadius: '6px', border: `1px solid ${colors.border}`,
+        background: colors.bg, color: colors.text, fontSize: '0.88em',
+        ...style,
+      }}
+    >
+      <span style={{ fontWeight: 700, flexShrink: 0 }}>{colors.icon}</span>
+      <div style={{ flex: 1 }}>
+        {el.title && <div style={{ fontWeight: 600, marginBottom: 2 }}>{el.title}</div>}
+        <div>{el.content}</div>
+      </div>
+      {el.dismissible && (
+        <button
+          onClick={() => setDismissed(true)}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.text, padding: 0, lineHeight: 1 }}
+          aria-label="Dismiss"
+        >×</button>
+      )}
+    </div>
+  )
+}
+
+// ─── Embedded chat widget ─────────────────────────────────────────────────────
+
+function EmbeddedChatWidget({ el, id, className, style }: { el: ViewElement; id?: string; className?: string; style?: React.CSSProperties }) {
+  const chat = useContext(ChatWidgetContext)
+
+  if (!chat) {
+    return (
+      <div id={id} className={className} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 8, ...style }}>
+        Chat widget not connected
+      </div>
+    )
+  }
+
+  return (
+    <div
+      id={id}
+      className={['gui-agent-widget', className].filter(Boolean).join(' ')}
+      style={{ display: 'flex', flexDirection: 'column', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', background: '#fff', ...style }}
+    >
+      {/* Title bar */}
+      <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontWeight: 600, fontSize: '0.9em', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <span style={{ fontSize: '1.1em' }}>🤖</span>
+        {el.agent_title ?? el.agent_name ?? 'Agent'}
+        <span style={{
+          marginLeft: 'auto', width: 8, height: 8, borderRadius: '50%',
+          background: chat.status === 'connected' ? '#22c55e' : '#f59e0b',
+          flexShrink: 0,
+        }} />
+      </div>
+
+      <ChatArea
+        messages={chat.messages}
+        setMessages={chat.setMessages}
+        status={chat.status}
+        send={chat.send}
+      />
+    </div>
+  )
+}
+
 // ─── Element renderer ────────────────────────────────────────────────────────
 
 function renderElement(el: ViewElement, onInteract?: (json: string) => void, navigateTo?: (nameOrPath: string) => boolean): React.ReactNode {
@@ -384,7 +515,10 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
     case 'Text': {
       // Respect original tag_name for semantic headings/paragraphs
       const validTags = new Set(['h1','h2','h3','h4','h5','h6','p','span','div','label','li','td','th'])
-      const tag = el.tag_name && validTags.has(el.tag_name) ? el.tag_name : 'p'
+      let tag = el.tag_name && validTags.has(el.tag_name) ? el.tag_name : 'p'
+      // When element uses flex/grid layout (e.g. emoji circles), use div to avoid
+      // block-level <p> quirks and ensure the element respects its own height/width.
+      if (tag === 'p' && (style.display === 'flex' || style.display === 'grid')) tag = 'div'
       const Tag = tag as keyof React.JSX.IntrinsicElements
       return <Tag key={el.name} id={id} className={className} style={style}>{el.content}</Tag>
     }
@@ -395,7 +529,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
           key={el.name}
           id={id}
           className={className}
-          style={style}
+          style={{ fontFamily: 'inherit', ...style }}
           href={el.url ?? '#'}
           target={el.target ?? '_self'}
           rel={el.rel ?? (el.target === '_blank' ? 'noopener noreferrer' : undefined)}
@@ -417,10 +551,13 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
           key={el.name}
           id={id}
           className={className}
-          style={style}
+          // appearance:none + font/line-height inherit reset UA button styles so our
+          // custom styling (background, border-radius, etc.) applies cleanly.
+          style={{ appearance: 'none', fontFamily: 'inherit', lineHeight: 'inherit', ...style }}
           type="button"
           onClick={() => {
-            if (el.actionType === 'navigate' && el.url && navigateTo?.(el.url)) return
+            // actionType comes serialized as "Navigate" (capital N)
+            if (el.actionType?.toLowerCase() === 'navigate' && el.url && navigateTo?.(el.url)) return
             onInteract?.(JSON.stringify({ elementId: id ?? el.name, action: 'onClick' }))
           }}
         >
@@ -448,7 +585,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
           id={id}
           name={el.name}
           className={className}
-          style={{ padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '4px', ...style }}
+          style={{ padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '4px', fontFamily: 'inherit', ...style }}
           type={(el.field_type ?? 'text').toLowerCase()}
           placeholder={el.description || el.name}
           onBlur={(e) => onInteract?.(JSON.stringify({ elementId: id ?? el.name, action: 'onChange', value: e.target.value }))}
@@ -513,6 +650,9 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
         </ul>
       )
 
+    case 'Alert':
+      return <AlertElement key={el.name} el={el} id={id} className={className} style={style} />
+
     case 'EmbeddedContent': {
       const src = el.source ?? el.extra_props?.src ?? ''
       if (src) {
@@ -544,8 +684,8 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
         if (lt === 'flex') containerStyle.display = 'flex'
         else if (lt === 'grid') containerStyle.display = 'grid'
         for (const [k, v] of Object.entries(el.layout)) {
-          if (!v || k === 'layout_type') continue
-          ;(containerStyle as Record<string, string>)[snakeToCamel(k)] = v
+          if (!v || k === 'layout_type' || k === 'alignment') continue
+          ;(containerStyle as Record<string, string>)[snakeToCamel(k)] = typeof v === 'string' ? stripImportant(v) : v
         }
       }
       const validContainerTags = new Set(['div','section','article','header','footer','main','nav','aside','ul','ol'])
@@ -617,17 +757,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
       )
 
     case 'AgentComponent':
-      return (
-        <div
-          key={el.name}
-          id={id}
-          className={['gui-agent-component', className].filter(Boolean).join(' ')}
-          style={style}
-        >
-          <span>🤖</span>
-          <span>{el.agent_title ?? el.agent_name ?? 'Agent'} Widget</span>
-        </div>
-      )
+      return <EmbeddedChatWidget key={el.name} el={el} id={id} className={className} style={style} />
 
     default:
       return null
@@ -639,9 +769,10 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
 interface GUIRendererProps {
   content: unknown
   onInteract?: (eventJson: string) => void
+  chatProps?: ChatWidgetProps
 }
 
-export function GUIRenderer({ content, onInteract }: GUIRendererProps) {
+export function GUIRenderer({ content, onInteract, chatProps }: GUIRendererProps) {
   const rawId = useId()
   const scopeClass = 'gui-s' + rawId.replace(/[^a-zA-Z0-9]/g, '')
 
@@ -711,34 +842,36 @@ export function GUIRenderer({ content, onInteract }: GUIRendererProps) {
   const multiScreen = allScreens.length > 1
 
   return (
-    <div className="gui-renderer">
-      <div className="gui-renderer__header">
-        <span className="gui-renderer__title">{data.name}</span>
-        {data.description && (
-          <span className="gui-renderer__description">{data.description}</span>
-        )}
-      </div>
-
-      {(multiModule || multiScreen) && (
-        <div className="gui-renderer__tabs" role="tablist">
-          {allScreens.map((s, i) => (
-            <button
-              key={i}
-              role="tab"
-              aria-selected={i === activeIdx}
-              className={`gui-renderer__tab${i === activeIdx ? ' gui-renderer__tab--active' : ''}`}
-              onClick={() => setActiveIdx(i)}
-            >
-              {s.name}
-              {s.is_main_page && <span className="gui-renderer__tab-badge">home</span>}
-            </button>
-          ))}
+    <ChatWidgetContext.Provider value={chatProps ?? null}>
+      <div className="gui-renderer">
+        <div className="gui-renderer__header">
+          <span className="gui-renderer__title">{data.name}</span>
+          {data.description && (
+            <span className="gui-renderer__description">{data.description}</span>
+          )}
         </div>
-      )}
 
-      <div className={`gui-renderer__screen ${scopeClass}`}>
-        {(screen.view_elements ?? []).map((el) => renderElement(el, onInteract, navigateTo))}
+        {(multiModule || multiScreen) && (
+          <div className="gui-renderer__tabs" role="tablist">
+            {allScreens.map((s, i) => (
+              <button
+                key={i}
+                role="tab"
+                aria-selected={i === activeIdx}
+                className={`gui-renderer__tab${i === activeIdx ? ' gui-renderer__tab--active' : ''}`}
+                onClick={() => setActiveIdx(i)}
+              >
+                {s.name}
+                {s.is_main_page && <span className="gui-renderer__tab-badge">home</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className={`gui-renderer__screen ${scopeClass}`}>
+          {(screen.view_elements ?? []).map((el) => renderElement(el, onInteract, navigateTo))}
+        </div>
       </div>
-    </div>
+    </ChatWidgetContext.Provider>
   )
 }

@@ -20,7 +20,8 @@ export function AgentSelector({
 }: AgentSelectorProps) {
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
-  const [url, setUrl] = useState('')
+  const [url, setUrl] = useState('ws://localhost:8765')
+  const [mode, setMode] = useState<'chat' | 'gui'>('chat')
   const [urlError, setUrlError] = useState('')
 
   function handleAdd(e: React.FormEvent) {
@@ -37,9 +38,11 @@ export function AgentSelector({
       id: crypto.randomUUID(),
       name: name.trim(),
       url: trimmedUrl,
+      mode,
     })
     setName('')
-    setUrl('')
+    setUrl('ws://localhost:8765')
+    setMode('chat')
     setUrlError('')
     setShowForm(false)
   }
@@ -47,7 +50,8 @@ export function AgentSelector({
   function handleClose() {
     setShowForm(false)
     setName('')
-    setUrl('')
+    setUrl('ws://localhost:8765')
+    setMode('chat')
     setUrlError('')
   }
 
@@ -74,11 +78,14 @@ export function AgentSelector({
       <div className="agent-selector__grid">
         {agents.map((agent) => (
           <div key={agent.id} className="agent-card" onClick={() => onSelectAgent(agent)}>
-            <div className="agent-card__icon">🤖</div>
+            <div className="agent-card__icon">{agent.mode === 'gui' ? '💻' : '🤖'}</div>
             <div className="agent-card__info">
               <div className="agent-card__name">{agent.name}</div>
               <div className="agent-card__url">{agent.url}</div>
             </div>
+            <span className={`agent-card__mode-badge agent-card__mode-badge--${agent.mode ?? 'chat'}`}>
+              {agent.mode === 'gui' ? 'GUI' : 'Chat'}
+            </span>
             <button
               className="agent-card__remove"
               onClick={(e) => {
@@ -123,11 +130,34 @@ export function AgentSelector({
                     setUrl(e.target.value)
                     setUrlError('')
                   }}
-                  placeholder="ws://localhost:8765"
                   required
                 />
                 {urlError && <span className="modal__error">{urlError}</span>}
               </label>
+              <div className="modal__label">
+                Mode
+                <div className="mode-toggle">
+                  <button
+                    type="button"
+                    className={`mode-toggle__btn${mode === 'chat' ? ' mode-toggle__btn--active' : ''}`}
+                    onClick={() => setMode('chat')}
+                  >
+                    🤖 Chat
+                  </button>
+                  <button
+                    type="button"
+                    className={`mode-toggle__btn${mode === 'gui' ? ' mode-toggle__btn--active' : ''}`}
+                    onClick={() => setMode('gui')}
+                  >
+                    💻 Full GUI
+                  </button>
+                </div>
+                <p className="modal__hint">
+                  {mode === 'chat'
+                    ? 'Standard chat interface — send messages and receive text, images, and inline UI replies.'
+                    : 'Full GUI mode — the agent controls the entire UI; interactions are sent back as events.'}
+                </p>
+              </div>
               <div className="modal__actions">
                 <button type="button" className="btn btn--secondary" onClick={handleClose}>
                   Cancel

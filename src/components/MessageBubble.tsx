@@ -165,7 +165,7 @@ function renderContent(
     case PayloadAction.AGENT_REPLY_AUDIO:
       return <AudioMessage content={content} />
 
-    case PayloadAction.AGENT_REPLY_UI:
+    case PayloadAction.AGENT_REPLY_GUI:
       return <GUIRenderer content={content} onInteract={onUIInteract} />
 
     default:

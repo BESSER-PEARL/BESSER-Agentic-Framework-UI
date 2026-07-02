@@ -28,6 +28,37 @@
 }
 .btn--ghost:hover { background: var(--border); color: var(--text-primary); }
 
+/* ─── GUI Agent Layout ───────────────────────────────────────────────────── */
+
+/* When ChatArea is embedded inside an AgentComponent widget, constrain the
+   message list height so it scrolls internally rather than expanding the page. */
+.gui-agent-widget {
+  min-height: 300px;
+}
+
+.gui-agent-widget .chat-area {
+  min-height: 0;
+}
+
+.gui-agent-widget .chat-area__messages {
+  max-height: 420px;
+}
+
+.gui-agent-layout__content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.gui-agent-layout__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
 /* ─── Agent Selector ─────────────────────────────────────────────────────── */
 
 .agent-selector {
@@ -160,6 +191,59 @@
 }
 .agent-card:hover .agent-card__remove { opacity: 1; }
 .agent-card__remove:hover { background: var(--error-bg); color: var(--error); }
+
+.agent-card__mode-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+.agent-card__mode-badge--chat { background: #e0f2fe; color: #0369a1; }
+.agent-card__mode-badge--gui  { background: #f3e8ff; color: #7c3aed; }
+
+/* ─── Mode Toggle ────────────────────────────────────────────────────────── */
+
+.mode-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+.mode-toggle__btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: var(--bg);
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  font-weight: 500;
+}
+.mode-toggle__btn + .mode-toggle__btn {
+  border-left: 1px solid var(--border);
+}
+.mode-toggle__btn--active {
+  background: var(--accent);
+  color: #fff;
+}
+.mode-toggle__btn:not(.mode-toggle__btn--active):hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.modal__hint {
+  font-size: 0.80rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.45;
+}
 
 /* ─── Modal ──────────────────────────────────────────────────────────────── */
 
@@ -1025,6 +1109,9 @@
   padding: 0;
   overflow-x: auto;
   background: #fff;
+  /* Isolate GUI content from the app's dark-mode CSS variable (--text-primary: #f1f5f9)
+     that would otherwise cascade and make all GUI text appear white. */
+  color: #1a202c;
   min-height: 200px;
   min-width: 280px;
 }

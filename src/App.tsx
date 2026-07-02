@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AgentSelector } from './components/AgentSelector'
 import { ChatLayout } from './components/ChatLayout'
+import { GUIAgentLayout } from './components/GUIAgentLayout'
 import type { Agent } from './types/agent'
 import './App.css'
 
@@ -55,6 +56,9 @@ function App() {
   }
 
   if (selectedAgent) {
+    if (selectedAgent.mode === 'gui') {
+      return <GUIAgentLayout agent={selectedAgent} onBack={() => setSelectedAgent(null)} />
+    }
     return <ChatLayout agent={selectedAgent} username={username} onBack={() => setSelectedAgent(null)} />
   }
 

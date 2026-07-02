@@ -2,6 +2,7 @@ export interface Agent {
   id: string
   name: string
   url: string
+  mode: 'chat' | 'gui'
 }
 
 export interface ChatMessage {

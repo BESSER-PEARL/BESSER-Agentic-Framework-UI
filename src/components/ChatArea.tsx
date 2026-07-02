@@ -29,7 +29,7 @@ export function ChatArea({ messages, setMessages, status, send }: ChatAreaProps)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const attachMenuRef = useRef<HTMLDivElement>(null)
@@ -37,7 +37,8 @@ export function ChatArea({ messages, setMessages, status, send }: ChatAreaProps)
   const audioChunksRef = useRef<Blob[]>([])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = messagesContainerRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [messages])
 
   // Close attach menu when clicking outside
@@ -211,7 +212,7 @@ export function ChatArea({ messages, setMessages, status, send }: ChatAreaProps)
 
   return (
     <div className="chat-area">
-      <div className="chat-area__messages">
+      <div className="chat-area__messages" ref={messagesContainerRef}>
         {messages.length === 0 && (
           <div className="chat-area__empty">
             {status === 'connecting'
@@ -226,7 +227,6 @@ export function ChatArea({ messages, setMessages, status, send }: ChatAreaProps)
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} onOptionSelect={handleOptionSelect} onUIInteract={handleUIInteract} />
         ))}
-        <div ref={bottomRef} />
       </div>
 
       <div className="chat-area__input-row">
