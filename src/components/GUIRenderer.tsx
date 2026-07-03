@@ -1361,15 +1361,6 @@ export function GUIRenderer({ content, onInteract, chatProps, chatMode = false }
   return (
     <ChatWidgetContext.Provider value={chatProps ?? null}>
       <div className={`gui-renderer${chatMode ? ' gui-renderer--chat' : ''}`}>
-        {!chatMode && (
-          <div className="gui-renderer__header">
-            <span className="gui-renderer__title">{data.name}</span>
-            {data.description && (
-              <span className="gui-renderer__description">{data.description}</span>
-            )}
-          </div>
-        )}
-
         {(multiModule || multiScreen) && (
           <div className="gui-renderer__tabs" role="tablist">
             {allScreens.map((s, i) => (

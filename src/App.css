@@ -1035,8 +1035,6 @@
 .gui-renderer {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 10px;
   overflow: hidden;
   background: #fff;
   font-size: 0.9rem;
