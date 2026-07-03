@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { SessionSidebar } from './SessionSidebar'
 import { ChatArea } from './ChatArea'
+import { ThemeToggle } from './ThemeToggle'
 import { PayloadAction } from '../types/payload'
+import type { Theme } from '../hooks/useTheme'
 import {
   REASONING_TRACE_ACTION,
   isReasoningEnd,
@@ -18,6 +20,8 @@ interface ChatLayoutProps {
   agent: Agent
   username?: string
   onBack: () => void
+  theme: Theme
+  onToggleTheme: () => void
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -141,7 +145,7 @@ function applyTaskListUpdate(
   ]
 }
 
-export function ChatLayout({ agent, username, onBack }: ChatLayoutProps) {
+export function ChatLayout({ agent, username, onBack, theme, onToggleTheme }: ChatLayoutProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null)
   const [wsUrl, setWsUrl] = useState<string | null>(null)
@@ -268,6 +272,7 @@ export function ChatLayout({ agent, username, onBack }: ChatLayoutProps) {
           <span className="status-badge__dot" style={{ background: dotColor }} />
           <span style={{ color: dotColor }}>{statusLabel}</span>
         </div>
+        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
       </header>
 
       <div className="chat-layout__body">

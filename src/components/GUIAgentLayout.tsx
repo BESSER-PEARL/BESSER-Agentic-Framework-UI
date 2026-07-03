@@ -3,11 +3,15 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { PayloadAction } from '../types/payload'
 import type { Payload } from '../types/payload'
 import type { Agent, ChatMessage } from '../types/agent'
+import type { Theme } from '../hooks/useTheme'
 import { GUIRenderer } from './GUIRenderer'
+import { ThemeToggle } from './ThemeToggle'
 
 interface GUIAgentLayoutProps {
   agent: Agent
   onBack: () => void
+  theme: Theme
+  onToggleTheme: () => void
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -27,7 +31,7 @@ const STATUS_LABEL: Record<string, string> = {
 // Actions that update the GUI model rather than producing chat messages.
 const GUI_ACTIONS = new Set([PayloadAction.AGENT_REPLY_GUI, PayloadAction.AGENT_REPLY_GUI_UPDATE])
 
-export function GUIAgentLayout({ agent, onBack }: GUIAgentLayoutProps) {
+export function GUIAgentLayout({ agent, onBack, theme, onToggleTheme }: GUIAgentLayoutProps) {
   const [guiModel, setGuiModel] = useState<unknown>(null)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
 
@@ -79,6 +83,7 @@ export function GUIAgentLayout({ agent, onBack }: GUIAgentLayoutProps) {
           <span className="status-badge__dot" style={{ background: dotColor }} />
           <span style={{ color: dotColor }}>{statusLabel}</span>
         </div>
+        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
       </header>
 
       <div className="gui-agent-layout__content">

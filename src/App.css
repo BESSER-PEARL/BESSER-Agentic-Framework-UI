@@ -27,6 +27,15 @@
   padding: 8px 12px;
 }
 .btn--ghost:hover { background: var(--border); color: var(--text-primary); }
+.btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  flex-shrink: 0;
+}
 
 /* ─── GUI Agent Layout ───────────────────────────────────────────────────── */
 
@@ -62,12 +71,19 @@
 /* ─── Agent Selector ─────────────────────────────────────────────────────── */
 
 .agent-selector {
+  position: relative;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 64px 24px 40px;
   background: var(--bg);
+}
+
+.agent-selector__topbar {
+  position: absolute;
+  top: 16px;
+  right: 16px;
 }
 
 .agent-selector__header {

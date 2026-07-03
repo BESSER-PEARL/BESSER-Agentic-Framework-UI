@@ -14,7 +14,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  .baf-chat {
+  html:not([data-theme="light"]) .baf-chat {
     --bg: #0f172a;
     --surface: #1e293b;
     --border: #334155;
@@ -27,6 +27,34 @@
     --error: #f87171;
     --error-bg: rgba(248, 113, 113, 0.1);
   }
+}
+
+[data-theme="dark"] .baf-chat {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --border: #334155;
+  --code-bg: #1a2535;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-bg: rgba(59, 130, 246, 0.1);
+  --error: #f87171;
+  --error-bg: rgba(248, 113, 113, 0.1);
+}
+
+[data-theme="light"] .baf-chat {
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --code-bg: #f1f5f9;
+  --text-primary: #1a202c;
+  --text-secondary: #64748b;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-bg: rgba(37, 99, 235, 0.08);
+  --error: #ef4444;
+  --error-bg: rgba(239, 68, 68, 0.1);
 }
 
 /* box-sizing reset scoped to .baf-chat subtree */

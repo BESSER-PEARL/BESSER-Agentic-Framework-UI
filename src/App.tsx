@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AgentSelector } from './components/AgentSelector'
 import { ChatLayout } from './components/ChatLayout'
 import { GUIAgentLayout } from './components/GUIAgentLayout'
+import { useTheme } from './hooks/useTheme'
 import type { Agent } from './types/agent'
 import './App.css'
 
@@ -30,6 +31,7 @@ function saveUsername(username: string) {
 }
 
 function App() {
+  const [theme, toggleTheme] = useTheme()
   const [agents, setAgents] = useState<Agent[]>(loadAgents)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [username, setUsername] = useState<string>(loadUsername)
@@ -57,9 +59,9 @@ function App() {
 
   if (selectedAgent) {
     if (selectedAgent.mode === 'gui') {
-      return <GUIAgentLayout agent={selectedAgent} onBack={() => setSelectedAgent(null)} />
+      return <GUIAgentLayout agent={selectedAgent} onBack={() => setSelectedAgent(null)} theme={theme} onToggleTheme={toggleTheme} />
     }
-    return <ChatLayout agent={selectedAgent} username={username} onBack={() => setSelectedAgent(null)} />
+    return <ChatLayout agent={selectedAgent} username={username} onBack={() => setSelectedAgent(null)} theme={theme} onToggleTheme={toggleTheme} />
   }
 
   return (
@@ -70,6 +72,8 @@ function App() {
       onSelectAgent={setSelectedAgent}
       onAddAgent={handleAddAgent}
       onRemoveAgent={handleRemoveAgent}
+      theme={theme}
+      onToggleTheme={toggleTheme}
     />
   )
 }

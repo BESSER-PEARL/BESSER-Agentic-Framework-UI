@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import type { Agent } from '../types/agent'
+import type { Theme } from '../hooks/useTheme'
+import { ThemeToggle } from './ThemeToggle'
 
 interface AgentSelectorProps {
   agents: Agent[]
@@ -8,6 +10,8 @@ interface AgentSelectorProps {
   onSelectAgent: (agent: Agent) => void
   onAddAgent: (agent: Agent) => void
   onRemoveAgent: (id: string) => void
+  theme: Theme
+  onToggleTheme: () => void
 }
 
 export function AgentSelector({
@@ -17,6 +21,8 @@ export function AgentSelector({
   onSelectAgent,
   onAddAgent,
   onRemoveAgent,
+  theme,
+  onToggleTheme,
 }: AgentSelectorProps) {
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
@@ -57,6 +63,9 @@ export function AgentSelector({
 
   return (
     <div className="agent-selector">
+      <div className="agent-selector__topbar">
+        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+      </div>
       <div className="agent-selector__header">
         <h1 className="agent-selector__title">BESSER Agentic Framework</h1>
         <p className="agent-selector__subtitle">Select an agent to start a conversation</p>
