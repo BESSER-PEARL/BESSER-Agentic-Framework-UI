@@ -1,6 +1,5 @@
 import { useState, useId, useMemo, useEffect, useRef, useCallback, createContext, useContext } from 'react'
 import type { ChatMessage } from '../types/agent'
-import { PayloadAction } from '../types/payload'
 import type { ConnectionStatus } from '../hooks/useWebSocket'
 import { ChatArea } from './ChatArea'
 
@@ -155,7 +154,7 @@ interface ChatWidgetProps {
   messages: ChatMessage[]
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>
   send: (action: string, message: unknown) => void
-  status: ConnectionStatus | string
+  status: ConnectionStatus
 }
 
 const ChatWidgetContext = createContext<ChatWidgetProps | null>(null)
@@ -779,7 +778,7 @@ function InputFieldElement({ el, onInteract }: { el: ViewElement; onInteract?: (
   const ca = el.custom_attributes ?? {}
   const label = el.label ?? (ca['data-label'] as string | undefined) ?? undefined
   const resolvedPlaceholder = el.placeholder ?? (ca['data-placeholder'] as string | undefined) ?? el.description ?? el.name
-  const required = el.required ?? (ca['data-required'] === 'true') ?? false
+  const required = el.required ?? (ca['data-required'] === 'true')
   const minValue = el.min_value ?? (ca['data-min'] != null ? Number(ca['data-min']) : undefined)
   const maxValue = el.max_value ?? (ca['data-max'] != null ? Number(ca['data-max']) : undefined)
   const stepValue = el.step ?? (ca['data-step'] != null ? Number(ca['data-step']) : undefined)
