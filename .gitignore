@@ -422,6 +422,9 @@ dist/
 dist-ssr/
 *.local
 
+# JetBrains IDEs
+.idea/
+
 # OS
 .DS_Store
 Thumbs.db
