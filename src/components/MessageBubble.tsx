@@ -166,7 +166,7 @@ function renderContent(
       return <AudioMessage content={content} />
 
     case PayloadAction.AGENT_REPLY_GUI:
-      return <GUIRenderer content={content} onInteract={onUIInteract} />
+      return <GUIRenderer content={content} onInteract={onUIInteract} chatMode />
 
     default:
       return <p className="msg-text msg-text--muted">[Unsupported message type: {action}]</p>

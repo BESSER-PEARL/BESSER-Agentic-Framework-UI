@@ -1116,6 +1116,87 @@
   min-width: 280px;
 }
 
+/* ─── Chat-mode overrides ────────────────────────────────────────────────── */
+/* When GUIRenderer is embedded in a chat message bubble, strip all white/hardcoded
+   backgrounds so the content blends with the surrounding chat interface.
+   Inline element backgrounds/colors are already stripped by renderElement in JS;
+   these rules handle the structural wrapper divs that are owned by GUIRenderer itself. */
+
+/* Outer wrapper: remove the card-like white box and border */
+.gui-renderer--chat {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+/* Screen area: transparent, inherit chat text color, match chat typography */
+.gui-renderer--chat .gui-renderer__screen {
+  background: transparent;
+  color: inherit;
+  min-height: 0;
+  min-width: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+/* Header: transparent background, subtle bottom border */
+.gui-renderer--chat .gui-renderer__header {
+  background: transparent;
+  padding: 0 0 6px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Tabs: transparent background */
+.gui-renderer--chat .gui-renderer__tabs {
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+/* Native form inputs: inherit dark-mode surface */
+.gui-renderer--chat input:not([type="radio"]):not([type="checkbox"]):not([type="range"]):not([type="color"]):not([type="file"]),
+.gui-renderer--chat textarea,
+.gui-renderer--chat select {
+  background: var(--surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+/* Labels readable on dark background */
+.gui-renderer--chat label,
+.gui-renderer--chat label > span {
+  color: var(--text-primary) !important;
+}
+
+/* MultiSelect option list */
+.gui-renderer--chat .gui-ms-list {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+.gui-renderer--chat .gui-ms-item {
+  background: var(--surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+.gui-renderer--chat .gui-ms-item--selected {
+  background: var(--accent-bg, #1e3a5f) !important;
+  color: var(--accent) !important;
+}
+
+/* Chip pills (MultiSelect selected values, TagsInput) */
+.gui-renderer--chat .gui-chip {
+  background: var(--accent-bg, #1e3a5f) !important;
+  color: var(--accent) !important;
+}
+
+/* TagsInput outer wrapper */
+.gui-renderer--chat .gui-tags-container {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+
 /* Chart placeholder */
 .gui-chart-placeholder {
   display: flex;

@@ -240,9 +240,54 @@ function stylingToReact(styling?: StylingNode): React.CSSProperties {
   return s as React.CSSProperties
 }
 
+// ─── Chat-mode style stripping ───────────────────────────────────────────────
+
+/** Returns true for whites, near-whites, and transparent values — backgrounds
+ *  that exist only to set a "canvas" color rather than convey meaning.
+ *  Gradients and saturated colors always return false (keep them). */
+function isNeutralBackground(value: string): boolean {
+  const v = value.trim().toLowerCase()
+  if (v.includes('gradient')) return false          // gradients are always intentional
+  if (v === 'transparent' || v === 'none' || v === 'initial' || v === '') return true
+  if (v === 'white' || v === '#fff' || v === '#ffffff') return true
+  const hex6 = v.match(/^#([0-9a-f]{6})$/)
+  if (hex6) {
+    const n = parseInt(hex6[1], 16)
+    const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff
+    return (r + g + b) / 3 > 200                   // near-white: avg channel > 200/255
+  }
+  const hex3 = v.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/)
+  if (hex3) {
+    const r = parseInt(hex3[1] + hex3[1], 16)
+    const g = parseInt(hex3[2] + hex3[2], 16)
+    const b = parseInt(hex3[3] + hex3[3], 16)
+    return (r + g + b) / 3 > 200
+  }
+  return false  // unknown format — keep it
+}
+
+/** In chat mode, strip only neutral/near-white backgrounds so the element blends
+ *  with the chat surface, while preserving intentional colors and gradients.
+ *  Text color is stripped together with the background (so elements with a colored
+ *  background keep their contrasting text color). */
+function stripChatColors(style: React.CSSProperties): React.CSSProperties {
+  const result = { fontFamily: 'inherit', ...style } as Record<string, unknown>
+  const bg = typeof result.background === 'string' ? result.background
+           : typeof result.backgroundColor === 'string' ? result.backgroundColor
+           : null
+  if (bg === null || isNeutralBackground(bg)) {
+    // Neutral/missing background — make transparent and inherit text color
+    delete result.background
+    delete result.backgroundColor
+    delete result.color
+  }
+  // Colored/gradient background — keep both background and text color as-is
+  return result as React.CSSProperties
+}
+
 // ─── Scoped CSS from style_entries ──────────────────────────────────────────
 
-function buildScopedCSS(entries: StyleEntry[], scopeClass: string): string {
+function buildScopedCSS(entries: StyleEntry[], scopeClass: string, chatMode = false): string {
   if (!Array.isArray(entries)) return ''
   let css = ''
   for (const entry of entries) {
@@ -261,6 +306,13 @@ function buildScopedCSS(entries: StyleEntry[], scopeClass: string): string {
       style['flex'] = '1'
       delete style['height']   // small fixed heights cause chart overflow
       delete style['width']    // flex: 1 distributes width evenly
+    }
+
+    // In chat mode, strip background/color so scoped CSS agrees with stripped inline styles.
+    if (chatMode) {
+      delete style['background']
+      delete style['background-color']
+      delete style['color']
     }
 
     const props = Object.entries(style)
@@ -577,9 +629,9 @@ function TagsInput({ el, id, className, onInteract }: { el: ViewElement; id?: st
   }
 
   return (
-    <div id={id} className={className} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', minHeight: '38px' }}>
+    <div id={id} className={[className, 'gui-tags-container'].filter(Boolean).join(' ')} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', minHeight: '38px' }}>
       {tags.map((tag) => (
-        <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '12px', fontSize: '0.82em' }}>
+        <span key={tag} className="gui-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '12px', fontSize: '0.82em' }}>
           {tag}
           <button type="button" onClick={() => removeTag(tag)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1 }}>×</button>
         </span>
@@ -678,7 +730,7 @@ function MultiSelectInput({ el, id, className, onInteract }: { el: ViewElement; 
           {selected.map((val) => {
             const opt = options.find((o) => o.value === val)
             return (
-              <span key={val} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '12px', fontSize: '0.82em' }}>
+              <span key={val} className="gui-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '12px', fontSize: '0.82em' }}>
                 {opt?.label ?? val}
                 <button type="button" onClick={() => toggle(val)} disabled={el.disabled}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1 }}>×</button>
@@ -687,11 +739,12 @@ function MultiSelectInput({ el, id, className, onInteract }: { el: ViewElement; 
           })}
         </div>
       )}
-      <div style={{ border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden' }}>
+      <div className="gui-ms-list" style={{ border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden' }}>
         {options.map((o, i) => {
           const isSelected = selected.includes(o.value)
           return (
-            <div key={i} onClick={() => !el.disabled && toggle(o.value)}
+            <div key={i} className={`gui-ms-item${isSelected ? ' gui-ms-item--selected' : ''}`}
+              onClick={() => !el.disabled && toggle(o.value)}
               style={{
                 padding: '6px 10px', cursor: el.disabled ? 'default' : 'pointer',
                 background: isSelected ? '#dbeafe' : (i % 2 === 0 ? '#fff' : '#f8fafc'),
@@ -976,7 +1029,7 @@ function EmbeddedChatWidget({ el, id, className, style }: { el: ViewElement; id?
 
 // ─── Element renderer ────────────────────────────────────────────────────────
 
-function renderElement(el: ViewElement, onInteract?: (json: string) => void, navigateTo?: (nameOrPath: string) => boolean): React.ReactNode {
+function renderElement(el: ViewElement, onInteract?: (json: string) => void, navigateTo?: (nameOrPath: string) => boolean, chatMode = false): React.ReactNode {
   const style = stylingToReact(el.styling)
   const id = el.component_id ?? undefined
   const className = (el.css_classes ?? []).join(' ') || undefined
@@ -990,7 +1043,8 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
       // block-level <p> quirks and ensure the element respects its own height/width.
       if (tag === 'p' && (style.display === 'flex' || style.display === 'grid')) tag = 'div'
       const Tag = tag as keyof React.JSX.IntrinsicElements
-      return <Tag key={el.name} id={id} className={className} style={style}>{el.content}</Tag>
+      const textStyle = chatMode ? stripChatColors(style) : style
+      return <Tag key={el.name} id={id} className={className} style={textStyle}>{el.content}</Tag>
     }
 
     case 'Link':
@@ -999,7 +1053,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
           key={el.name}
           id={id}
           className={className}
-          style={{ fontFamily: 'inherit', ...style }}
+          style={chatMode ? stripChatColors(style) : { fontFamily: 'inherit', ...style }}
           href={el.url ?? '#'}
           target={el.target ?? '_self'}
           rel={el.rel ?? (el.target === '_blank' ? 'noopener noreferrer' : undefined)}
@@ -1057,14 +1111,14 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
           key={el.name}
           id={id}
           className={className}
-          style={{ display: 'flex', flexDirection: 'column', gap: '8px', ...style }}
+          style={{ display: 'flex', flexDirection: 'column', gap: '8px', ...(chatMode ? stripChatColors(style) : style) }}
           onSubmit={(e) => {
             e.preventDefault()
             const data = Object.fromEntries(new FormData(e.currentTarget))
             onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, action: 'onSubmit', value: data }))
           }}
         >
-          {(el.inputFields ?? []).map((f) => renderElement(f, onInteract, navigateTo))}
+          {(el.inputFields ?? []).map((f) => renderElement(f, onInteract, navigateTo, chatMode))}
         </form>
       )
 
@@ -1072,7 +1126,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
       const navTag = el.tag_name && el.tag_name === 'nav' ? 'nav' : 'div'
       const NavTag = navTag as keyof React.JSX.IntrinsicElements
       return (
-        <NavTag key={el.name} id={id} className={className} style={style}>
+        <NavTag key={el.name} id={id} className={className} style={chatMode ? stripChatColors(style) : style}>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {(el.menuItems ?? []).map((item, i) => (
               <li key={i}>
@@ -1100,7 +1154,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
 
     case 'DataList':
       return (
-        <ul key={el.name} id={id} className={className} style={{ padding: 0, ...style }}>
+        <ul key={el.name} id={id} className={className} style={{ padding: 0, ...(chatMode ? stripChatColors(style) : style) }}>
           {(el.list_sources ?? []).map((_, i) => (
             <li key={i} style={{ padding: '4px 0', color: '#94a3b8', fontStyle: 'italic' }}>
               (data item {i + 1})
@@ -1147,12 +1201,13 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
           ;(containerStyle as Record<string, string>)[snakeToCamel(k)] = typeof v === 'string' ? stripImportant(v) : v
         }
       }
+      const finalContainerStyle = chatMode ? stripChatColors(containerStyle) : containerStyle
       const validContainerTags = new Set(['div','section','article','header','footer','main','nav','aside','ul','ol'])
       const tag = el.tag_name && validContainerTags.has(el.tag_name) ? el.tag_name : 'div'
       const ContainerTag = tag as keyof React.JSX.IntrinsicElements
       return (
-        <ContainerTag key={el.name} id={id} className={className} style={containerStyle}>
-          {(el.view_elements ?? []).map((child) => renderElement(child, onInteract, navigateTo))}
+        <ContainerTag key={el.name} id={id} className={className} style={finalContainerStyle}>
+          {(el.view_elements ?? []).map((child) => renderElement(child, onInteract, navigateTo, chatMode))}
         </ContainerTag>
       )
     }
@@ -1166,7 +1221,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
 
     case 'Table':
       return (
-        <div key={el.name} id={id} className={className} style={{ overflowX: 'auto', ...style }}>
+        <div key={el.name} id={id} className={className} style={{ overflowX: 'auto', ...(chatMode ? stripChatColors(style) : style) }}>
           {el.title && (
             <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.95em' }}>{el.title}</div>
           )}
@@ -1205,7 +1260,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
           key={el.name}
           id={id}
           className={['gui-metric-card', className].filter(Boolean).join(' ')}
-          style={style}
+          style={chatMode ? stripChatColors(style) : style}
         >
           <div className="gui-metric-card__title">{el.metric_title ?? el.name}</div>
           <div className="gui-metric-card__value" style={{ color: el.value_color ?? '#2c3e50' }}>
@@ -1229,9 +1284,12 @@ interface GUIRendererProps {
   content: unknown
   onInteract?: (eventJson: string) => void
   chatProps?: ChatWidgetProps
+  /** When true, backgrounds and explicit text colors are stripped so the GUI
+   *  blends with the surrounding chat interface typography and color scheme. */
+  chatMode?: boolean
 }
 
-export function GUIRenderer({ content, onInteract, chatProps }: GUIRendererProps) {
+export function GUIRenderer({ content, onInteract, chatProps, chatMode = false }: GUIRendererProps) {
   const rawId = useId()
   const scopeClass = 'gui-s' + rawId.replace(/[^a-zA-Z0-9]/g, '')
 
@@ -1272,8 +1330,8 @@ export function GUIRenderer({ content, onInteract, chatProps }: GUIRendererProps
   }, [allScreens])
 
   const scopedCSS = useMemo(
-    () => (data?.style_entries ? buildScopedCSS(data.style_entries, scopeClass) : ''),
-    [data, scopeClass],
+    () => (data?.style_entries ? buildScopedCSS(data.style_entries, scopeClass, chatMode) : ''),
+    [data, scopeClass, chatMode],
   )
 
   // Inject scoped CSS into <head>
@@ -1302,13 +1360,15 @@ export function GUIRenderer({ content, onInteract, chatProps }: GUIRendererProps
 
   return (
     <ChatWidgetContext.Provider value={chatProps ?? null}>
-      <div className="gui-renderer">
-        <div className="gui-renderer__header">
-          <span className="gui-renderer__title">{data.name}</span>
-          {data.description && (
-            <span className="gui-renderer__description">{data.description}</span>
-          )}
-        </div>
+      <div className={`gui-renderer${chatMode ? ' gui-renderer--chat' : ''}`}>
+        {!chatMode && (
+          <div className="gui-renderer__header">
+            <span className="gui-renderer__title">{data.name}</span>
+            {data.description && (
+              <span className="gui-renderer__description">{data.description}</span>
+            )}
+          </div>
+        )}
 
         {(multiModule || multiScreen) && (
           <div className="gui-renderer__tabs" role="tablist">
@@ -1328,7 +1388,7 @@ export function GUIRenderer({ content, onInteract, chatProps }: GUIRendererProps
         )}
 
         <div className={`gui-renderer__screen ${scopeClass}`}>
-          {(screen.view_elements ?? []).map((el) => renderElement(el, onInteract, navigateTo))}
+          {(screen.view_elements ?? []).map((el) => renderElement(el, onInteract, navigateTo, chatMode))}
         </div>
       </div>
     </ChatWidgetContext.Provider>
