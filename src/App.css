@@ -220,6 +220,145 @@
 .agent-card__mode-badge--chat { background: #e0f2fe; color: #0369a1; }
 .agent-card__mode-badge--gui  { background: #f3e8ff; color: #7c3aed; }
 
+/* ─── Agent Selector Toolbar (view toggle + edit actions) ───────────────── */
+
+.agent-selector__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: 900px;
+  margin-bottom: 16px;
+}
+.agent-selector__toolbar-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.view-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.view-toggle__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 36px;
+  border: none;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.view-toggle__btn + .view-toggle__btn {
+  border-left: 1px solid var(--border);
+}
+.view-toggle__btn--active {
+  background: var(--accent);
+  color: #fff;
+}
+.view-toggle__btn:not(.view-toggle__btn--active):hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+/* ─── Agent Selector — List View ─────────────────────────────────────────── */
+
+.agent-selector__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 900px;
+}
+.agent-selector__list .agent-card { width: 100%; }
+.agent-selector__list .agent-card--add { flex-direction: row; gap: 10px; padding: 16px 20px; }
+
+/* ─── Agent Card — Edit Mode ─────────────────────────────────────────────── */
+
+.agent-card--edit {
+  cursor: default;
+  align-items: flex-start;
+}
+.agent-card--edit:hover {
+  border-color: var(--border);
+  box-shadow: none;
+}
+.agent-card--edit.agent-card--drag-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-bg);
+}
+.agent-card--edit.agent-card--dragging {
+  opacity: 0.45;
+}
+.agent-card--edit .agent-card__remove {
+  opacity: 1;
+}
+
+.agent-card__drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  cursor: grab;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.agent-card__drag-handle:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+.agent-card__drag-handle:active {
+  cursor: grabbing;
+}
+
+.agent-card__edit-fields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 28px; /* keep clear of the absolute remove button */
+}
+.agent-card__edit-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.agent-card__edit-label .modal__error {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+.agent-card__edit-input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  background: var(--bg);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.agent-card__edit-input:focus { border-color: var(--accent); }
+
 /* ─── Mode Toggle ────────────────────────────────────────────────────────── */
 
 .mode-toggle {
@@ -252,6 +391,11 @@
 .mode-toggle__btn:not(.mode-toggle__btn--active):hover {
   background: var(--border);
   color: var(--text-primary);
+}
+
+.mode-toggle--sm .mode-toggle__btn {
+  padding: 6px 10px;
+  font-size: 0.8rem;
 }
 
 .modal__hint {

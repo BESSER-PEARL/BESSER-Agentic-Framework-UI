@@ -52,6 +52,11 @@ function App() {
     })
   }
 
+  function handleUpdateAgents(next: Agent[]) {
+    setAgents(next)
+    saveAgents(next)
+  }
+
   function handleUsernameChange(value: string) {
     setUsername(value)
     saveUsername(value)
@@ -72,6 +77,7 @@ function App() {
       onSelectAgent={setSelectedAgent}
       onAddAgent={handleAddAgent}
       onRemoveAgent={handleRemoveAgent}
+      onUpdateAgents={handleUpdateAgents}
       theme={theme}
       onToggleTheme={toggleTheme}
     />
