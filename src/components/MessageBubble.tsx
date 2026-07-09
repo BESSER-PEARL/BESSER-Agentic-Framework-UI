@@ -533,16 +533,107 @@ function RagMessage({ content }: { content: unknown }) {
 
 // ─── Audio Player ──────────────────────────────────────────────────────────
 
-function AudioPlayer({ data, mimeType = 'audio/wav' }: { data: string; mimeType?: string }) {
+function writeWavString(view: DataView, offset: number, str: string): number {
+  for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i))
+  return offset + str.length
+}
+
+function pcmBytesToWavBlob(
+  rawBytes: ArrayBuffer,
+  sampleRate: number,
+  dtype: string,
+  shape: number[],
+): Blob {
+  // shape is channel-first: [n_samples] for mono, [n_channels, n_samples] for multi-channel
+  const numChannels = shape.length > 1 ? shape[0] : 1
+  const numSamples = shape.length > 1 ? shape[shape.length - 1] : shape[0]
+
+  let pcmBuffer: ArrayBuffer
+  let bitsPerSample: number
+  let audioFormat: number // 1 = PCM integer, 3 = IEEE float
+
+  if (dtype === 'int16') {
+    pcmBuffer = rawBytes
+    bitsPerSample = 16
+    audioFormat = 1
+  } else {
+    // Normalise everything else to float32
+    let floats: Float32Array
+    if (dtype === 'float32') {
+      floats = new Float32Array(rawBytes)
+    } else if (dtype === 'float64') {
+      const f64 = new Float64Array(rawBytes)
+      floats = new Float32Array(f64.length)
+      for (let i = 0; i < f64.length; i++) floats[i] = f64[i]
+    } else if (dtype === 'int32') {
+      const i32 = new Int32Array(rawBytes)
+      floats = new Float32Array(i32.length)
+      for (let i = 0; i < i32.length; i++) floats[i] = i32[i] / 2147483648
+    } else {
+      floats = new Float32Array(rawBytes)
+    }
+    // numpy stores multi-channel as [channels, samples]; WAV expects interleaved
+    if (numChannels > 1) {
+      const interleaved = new Float32Array(numChannels * numSamples)
+      for (let s = 0; s < numSamples; s++)
+        for (let c = 0; c < numChannels; c++)
+          interleaved[s * numChannels + c] = floats[c * numSamples + s]
+      pcmBuffer = interleaved.buffer
+    } else {
+      pcmBuffer = floats.buffer
+    }
+    bitsPerSample = 32
+    audioFormat = 3
+  }
+
+  const dataSize = pcmBuffer.byteLength
+  const wavBuffer = new ArrayBuffer(44 + dataSize)
+  const view = new DataView(wavBuffer)
+  let off = 0
+  off = writeWavString(view, off, 'RIFF')
+  view.setUint32(off, 36 + dataSize, true); off += 4
+  off = writeWavString(view, off, 'WAVE')
+  off = writeWavString(view, off, 'fmt ')
+  view.setUint32(off, 16, true); off += 4
+  view.setUint16(off, audioFormat, true); off += 2
+  view.setUint16(off, numChannels, true); off += 2
+  view.setUint32(off, sampleRate, true); off += 4
+  view.setUint32(off, sampleRate * numChannels * bitsPerSample / 8, true); off += 4
+  view.setUint16(off, numChannels * bitsPerSample / 8, true); off += 2
+  view.setUint16(off, bitsPerSample, true); off += 2
+  off = writeWavString(view, off, 'data')
+  view.setUint32(off, dataSize, true); off += 4
+  new Uint8Array(wavBuffer, off).set(new Uint8Array(pcmBuffer))
+
+  return new Blob([wavBuffer], { type: 'audio/wav' })
+}
+
+function AudioPlayer({
+  data,
+  sampleRate,
+  dtype,
+  shape,
+}: {
+  data: string
+  sampleRate?: number
+  dtype?: string
+  shape?: number[]
+}) {
   const [src, setSrc] = useState<string | null>(null)
 
   useEffect(() => {
     let url: string | null = null
     try {
-      const bytes = atob(data)
-      const arr = new Uint8Array(bytes.length)
-      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
-      const blob = new Blob([arr], { type: mimeType })
+      const binaryStr = atob(data)
+      const arr = new Uint8Array(binaryStr.length)
+      for (let i = 0; i < binaryStr.length; i++) arr[i] = binaryStr.charCodeAt(i)
+
+      let blob: Blob
+      if (sampleRate && dtype && shape) {
+        blob = pcmBytesToWavBlob(arr.buffer, sampleRate, dtype, shape)
+      } else {
+        blob = new Blob([arr], { type: 'audio/wav' })
+      }
       url = URL.createObjectURL(blob)
       setSrc(url)
     } catch {
@@ -551,7 +642,7 @@ function AudioPlayer({ data, mimeType = 'audio/wav' }: { data: string; mimeType?
     return () => {
       if (url) URL.revokeObjectURL(url)
     }
-  }, [data, mimeType])
+  }, [data, sampleRate, dtype, JSON.stringify(shape)])
 
   if (!src) return <span className="msg-text--muted">Audio unavailable</span>
   // The native <audio> element provides timeline scrubbing, play/pause and volume natively
@@ -561,25 +652,28 @@ function AudioPlayer({ data, mimeType = 'audio/wav' }: { data: string; mimeType?
 // ─── Audio Message (agent_reply_audio) ─────────────────────────────────────
 
 interface AudioContent {
-  data: string
-  type?: string
-  sample_rate?: number
-  dtype?: string
-  shape?: number[]
+  audio_data_base64: string
+  metadata?: {
+    sample_rate?: number
+    dtype?: string
+    shape?: number[]
+  }
 }
 
 function AudioMessage({ content }: { content: unknown }) {
-  const audio = typeof content === 'string'
-    ? { data: content }
-    : content as AudioContent
+  if (typeof content !== 'object' || content === null) {
+    return <span className="msg-text--muted">Audio unavailable</span>
+  }
+  const audio = content as AudioContent
+  const meta = audio.metadata ?? {}
   return (
     <div className="msg-audio">
-      <AudioPlayer data={audio.data} mimeType={audio.type ?? 'audio/wav'} />
-      {audio.sample_rate != null && (
-        <span className="msg-audio__meta">
-          {audio.sample_rate} Hz{audio.dtype ? ` · ${audio.dtype}` : ''}
-        </span>
-      )}
+      <AudioPlayer
+        data={audio.audio_data_base64}
+        sampleRate={meta.sample_rate}
+        dtype={meta.dtype}
+        shape={meta.shape}
+      />
     </div>
   )
 }
