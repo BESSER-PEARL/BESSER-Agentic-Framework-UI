@@ -19,7 +19,6 @@ export const PayloadAction = {
   AGENT_REPLY_AUDIO: 'agent_reply_audio',
   AGENT_REPLY_GUI: 'agent_reply_gui',
   AGENT_REPLY_GUI_UPDATE: 'agent_reply_gui_update',
-  USER_UPDATE_UI: 'user_update_ui',
   USER_GUI_EVENT: 'user_gui_event',
   FETCH_USER_MESSAGES: 'fetch_user_messages',
 } as const

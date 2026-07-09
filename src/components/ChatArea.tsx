@@ -172,7 +172,7 @@ export function ChatArea({ messages, setMessages, status, send }: ChatAreaProps)
   }
 
   function handleUIInteract(eventJson: string) {
-    send(PayloadAction.USER_UPDATE_UI, eventJson)
+    send(PayloadAction.USER_GUI_EVENT, eventJson)
   }
 
   function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
