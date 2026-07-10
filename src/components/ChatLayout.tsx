@@ -175,7 +175,7 @@ export function ChatLayout({ agent, username, onBack, theme, onToggleTheme }: Ch
       setMessages((prev) => [
         ...prev,
         {
-          id: crypto.randomUUID(),
+          id: payload.message_id ?? crypto.randomUUID(),
           action: payload.action,
           message: payload.message,
           isUser: false,

@@ -85,6 +85,10 @@ interface ViewElement {
   validationRules?: string
   // Form
   inputFields?: ViewElement[]
+  submit_label?: string
+  show_cancel?: boolean
+  cancel_label?: string
+  columns?: number
   // Menu
   menuItems?: MenuItem[]
   // DataList
@@ -146,6 +150,7 @@ interface GUIData {
   description?: string
   modules: GUIModule[]
   style_entries?: StyleEntry[]
+  width?: string
 }
 
 // ─── Embedded chat widget context ────────────────────────────────────────────
@@ -587,6 +592,8 @@ function RatingInput({ el, id, className, onInteract }: { el: ViewElement; id?: 
   const maxStars = el.max_value ?? 5
   return (
     <div id={id} className={className} style={{ display: 'flex', gap: '2px' }}>
+      {/* Controlled hidden input: stays in sync with rating state on every render */}
+      <input type="hidden" name={el.name} data-value-type="number" value={String(rating)} />
       {Array.from({ length: maxStars }, (_, i) => i + 1).map((star) => (
         <button
           key={star}
@@ -715,15 +722,19 @@ function MultiSelectInput({ el, id, className, onInteract }: { el: ViewElement; 
     }
     return []
   })
+  const hiddenRef = useRef<HTMLInputElement>(null)
 
   const toggle = (value: string) => {
     const next = selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]
     setSelected(next)
+    if (hiddenRef.current) hiddenRef.current.value = JSON.stringify(next)
     onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, fieldType: el.field_type, label: el.label || undefined, action: 'onChange', value: next }))
   }
 
   return (
     <div id={id} className={className} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      {/* Hidden input so FormData picks up the selected array when inside a <form> */}
+      <input type="hidden" ref={hiddenRef} name={el.name} data-value-type="json" defaultValue={JSON.stringify(selected)} />
       {selected.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
           {selected.map((val) => {
@@ -759,6 +770,35 @@ function MultiSelectInput({ el, id, className, onInteract }: { el: ViewElement; 
           )
         })}
       </div>
+    </div>
+  )
+}
+
+function CheckboxGroupInput({ el, id, className, onInteract }: { el: ViewElement; id?: string; className?: string; onInteract?: (json: string) => void }) {
+  const options = (el.options ?? []) as Array<{ label: string; value: string }>
+  const [checked, setChecked] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(options.map((o) => [o.value, false]))
+  )
+  const hiddenRef = useRef<HTMLInputElement>(null)
+  const disabled = el.disabled ?? false
+
+  const toggle = (value: string, isChecked: boolean) => {
+    const next = { ...checked, [value]: isChecked }
+    setChecked(next)
+    if (hiddenRef.current) hiddenRef.current.value = JSON.stringify(next)
+    onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, fieldType: el.field_type, label: el.label || undefined, action: 'onChange', value: next }))
+  }
+
+  return (
+    <div id={id} className={className} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <input type="hidden" ref={hiddenRef} name={el.name} data-value-type="json" defaultValue={JSON.stringify(checked)} />
+      {options.map((o, i) => (
+        <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: disabled ? 'default' : 'pointer' }}>
+          <input type="checkbox" checked={checked[o.value] ?? false} disabled={disabled}
+            onChange={(e) => toggle(o.value, e.target.checked)} />
+          {o.label}
+        </label>
+      ))}
     </div>
   )
 }
@@ -878,17 +918,7 @@ function InputFieldElement({ el, onInteract }: { el: ViewElement; onInteract?: (
       )
 
     case 'CheckboxGroup':
-      return wrap(
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          {options.map((o, i) => (
-            <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: disabled ? 'default' : 'pointer' }}>
-              <input type="checkbox" name={`${el.name}[]`} value={o.value} disabled={disabled}
-                onChange={(e) => emit({ option: o.value, checked: e.target.checked })} />
-              {o.label}
-            </label>
-          ))}
-        </div>
-      )
+      return wrap(<CheckboxGroupInput el={resolved} id={id} className={className} onInteract={onInteract} />)
 
     case 'Toggle':
       // ToggleInput already renders the label inline beside the switch;
@@ -1068,15 +1098,20 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
         </a>
       )
 
-    case 'Button':
+    case 'Button': {
+      const btnType = el.buttonType?.toLowerCase() ?? ''
+      const btnVariant =
+        btnType === 'outlined button'        ? 'gui-form-btn--outlined' :
+        btnType === 'flat button'            ? 'gui-form-btn--flat'     :
+        btnType === 'floating action button' ? 'gui-form-btn--fab'      :
+                                              'gui-form-btn--submit'
+      const btnClass = ['gui-form-btn', btnVariant, className].filter(Boolean).join(' ')
       return (
         <button
           key={el.name}
           id={id}
-          className={className}
-          // appearance:none + font/line-height inherit reset UA button styles so our
-          // custom styling (background, border-radius, etc.) applies cleanly.
-          style={{ appearance: 'none', fontFamily: 'inherit', lineHeight: 'inherit', ...style }}
+          className={btnClass}
+          style={{ fontFamily: 'inherit', lineHeight: 'inherit', ...style }}
           type="button"
           onClick={() => {
             // actionType comes serialized as "Navigate" (capital N)
@@ -1087,6 +1122,7 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
           {el.label}
         </button>
       )
+    }
 
     case 'Image':
       return (
@@ -1113,11 +1149,46 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
           style={{ display: 'flex', flexDirection: 'column', gap: '8px', ...(chatMode ? stripChatColors(style) : style) }}
           onSubmit={(e) => {
             e.preventDefault()
-            const data = Object.fromEntries(new FormData(e.currentTarget))
+            const formEl = e.currentTarget
+            const data: Record<string, unknown> = {}
+            // Collect all form values; parse hidden inputs with data-value-type markers
+            for (const [key, val] of new FormData(formEl).entries()) {
+              const jsonInput = formEl.querySelector<HTMLInputElement>(`[name="${key}"][data-value-type="json"]`)
+              const numberInput = formEl.querySelector<HTMLInputElement>(`[name="${key}"][data-value-type="number"]`)
+              if (jsonInput && typeof val === 'string') {
+                try { data[key] = JSON.parse(val) } catch { data[key] = val }
+              } else if (numberInput && typeof val === 'string') {
+                data[key] = Number(val)
+              } else {
+                data[key] = val
+              }
+            }
+            // Override single checkboxes with real booleans ('on'/absent → true/false)
+            formEl.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((cb) => {
+              if (cb.name) data[cb.name] = cb.checked
+            })
+            // Add '' for radio groups with no selected option
+            formEl.querySelectorAll<HTMLInputElement>('input[type="radio"]').forEach((r) => {
+              if (r.name && !(r.name in data)) data[r.name] = ''
+            })
             onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, action: 'onSubmit', value: data }))
           }}
         >
           {(el.inputFields ?? []).map((f) => renderElement(f, onInteract, navigateTo, chatMode))}
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <button type="submit" className="gui-form-btn gui-form-btn--submit">
+              {el.submit_label ?? 'Submit'}
+            </button>
+            {el.show_cancel && (
+              <button
+                type="button"
+                className="gui-form-btn gui-form-btn--cancel"
+                onClick={() => onInteract?.(JSON.stringify({ elementId: id ?? el.name, name: el.name, action: 'onCancel' }))}
+              >
+                {el.cancel_label ?? 'Cancel'}
+              </button>
+            )}
+          </div>
         </form>
       )
 
@@ -1282,13 +1353,14 @@ function renderElement(el: ViewElement, onInteract?: (json: string) => void, nav
 interface GUIRendererProps {
   content: unknown
   onInteract?: (eventJson: string) => void
+  messageId?: string
   chatProps?: ChatWidgetProps
   /** When true, backgrounds and explicit text colors are stripped so the GUI
    *  blends with the surrounding chat interface typography and color scheme. */
   chatMode?: boolean
 }
 
-export function GUIRenderer({ content, onInteract, chatProps, chatMode = false }: GUIRendererProps) {
+export function GUIRenderer({ content, onInteract, messageId, chatProps, chatMode = false }: GUIRendererProps) {
   const rawId = useId()
   const scopeClass = 'gui-s' + rawId.replace(/[^a-zA-Z0-9]/g, '')
 
@@ -1305,6 +1377,17 @@ export function GUIRenderer({ content, onInteract, chatProps, chatMode = false }
     () => (data?.modules ?? []).flatMap((m) => m.screens),
     [data],
   )
+
+  const onInteractWithId = useCallback((eventJson: string) => {
+    if (!onInteract) return
+    if (!messageId) { onInteract(eventJson); return }
+    try {
+      const evt = JSON.parse(eventJson)
+      onInteract(JSON.stringify({ ...evt, messageId }))
+    } catch {
+      onInteract(eventJson)
+    }
+  }, [onInteract, messageId])
 
   const [activeIdx, setActiveIdx] = useState(0)
 
@@ -1378,7 +1461,7 @@ export function GUIRenderer({ content, onInteract, chatProps, chatMode = false }
         )}
 
         <div className={`gui-renderer__screen ${scopeClass}`}>
-          {(screen.view_elements ?? []).map((el) => renderElement(el, onInteract, navigateTo, chatMode))}
+          {(screen.view_elements ?? []).map((el) => renderElement(el, onInteractWithId, navigateTo, chatMode))}
         </div>
       </div>
     </ChatWidgetContext.Provider>

@@ -20,7 +20,7 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({ message, onOptionSelect, onUIInteract }: MessageBubbleProps) {
-  const { action, message: content, isUser, timestamp } = message
+  const { id: messageId, action, message: content, isUser, timestamp } = message
   const timeLabel = timestamp ?? null
 
   // Reasoning traces use the standard agent message layout (so the width
@@ -80,12 +80,26 @@ export function MessageBubble({ message, onOptionSelect, onUIInteract }: Message
     )
   }
 
+  // GUI messages can declare a custom width; establish it at this level so that
+  // percentage values inside resolve against this container (not some ancestor).
+  let messageStyle: React.CSSProperties | undefined
+  let bodyStyle: React.CSSProperties | undefined
+  if (action === PayloadAction.AGENT_REPLY_GUI) {
+    try {
+      const guiData = (typeof content === 'string' ? JSON.parse(content) : content) as { width?: string }
+      if (guiData?.width) {
+        messageStyle = { width: guiData.width, maxWidth: guiData.width }
+        bodyStyle = { width: '100%' }
+      }
+    } catch { /* ignore */ }
+  }
+
   return (
-    <div className="message message--agent">
+    <div className="message message--agent" style={messageStyle}>
       {timeLabel && <span className="message__timestamp">{timeLabel}</span>}
-      <div className="message__body">
+      <div className="message__body" style={bodyStyle}>
         <div className="message__bubble message__bubble--agent">
-          {renderContent(action, content, onOptionSelect, onUIInteract)}
+          {renderContent(action, content, onOptionSelect, onUIInteract, messageId)}
         </div>
       </div>
     </div>
@@ -97,6 +111,7 @@ function renderContent(
   content: unknown,
   onOptionSelect?: (option: string) => void,
   onUIInteract?: (eventJson: string) => void,
+  messageId?: string,
 ) {
   switch (action) {
     case PayloadAction.AGENT_REPLY_STR: {
@@ -166,7 +181,7 @@ function renderContent(
       return <AudioMessage content={content} />
 
     case PayloadAction.AGENT_REPLY_GUI:
-      return <GUIRenderer content={content} onInteract={onUIInteract} chatMode />
+      return <GUIRenderer content={content} onInteract={onUIInteract} messageId={messageId} chatMode />
 
     default:
       return <p className="msg-text msg-text--muted">[Unsupported message type: {action}]</p>

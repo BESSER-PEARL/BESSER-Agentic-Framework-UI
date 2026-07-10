@@ -30,4 +30,5 @@ export interface Payload {
   message: unknown
   history?: boolean
   timestamp?: string
+  message_id?: string
 }
