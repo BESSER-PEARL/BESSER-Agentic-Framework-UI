@@ -88,7 +88,7 @@ interface ViewElement {
   submit_label?: string
   show_cancel?: boolean
   cancel_label?: string
-  columns?: number
+  form_columns?: number
   // Menu
   menuItems?: MenuItem[]
   // DataList

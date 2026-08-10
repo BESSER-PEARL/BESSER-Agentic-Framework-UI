@@ -563,7 +563,7 @@ function pcmBytesToWavBlob(
   const numChannels = shape.length > 1 ? shape[0] : 1
   const numSamples = shape.length > 1 ? shape[shape.length - 1] : shape[0]
 
-  let pcmBuffer: ArrayBuffer
+  let pcmBuffer: ArrayBufferLike
   let bitsPerSample: number
   let audioFormat: number // 1 = PCM integer, 3 = IEEE float
 
