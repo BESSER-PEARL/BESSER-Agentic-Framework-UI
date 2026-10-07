@@ -629,7 +629,12 @@
   border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+  opacity: 0;
+}
+.session-item:hover .session-item__delete,
+.session-item--active .session-item__delete {
+  opacity: 1;
 }
 .session-item__delete:hover {
   background: color-mix(in srgb, #ef4444 15%, transparent);

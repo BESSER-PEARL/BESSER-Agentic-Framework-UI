@@ -67,6 +67,13 @@ export function SessionSidebar({
     })
   }
 
+  function handleStartSession() {
+    onStartSession()
+    // Poll eagerly after starting so the new session appears as soon as BESSER writes it to the DB
+    setTimeout(() => fetchSessions(), 300)
+    setTimeout(() => fetchSessions(), 700)
+  }
+
   return (
     <aside className="session-sidebar">
       <div className="session-sidebar__header">
@@ -77,9 +84,9 @@ export function SessionSidebar({
             value={sessionName}
             onChange={(e) => onSessionNameChange(e.target.value)}
             placeholder="Session name (optional)"
-            onKeyDown={(e) => e.key === 'Enter' && onStartSession()}
+            onKeyDown={(e) => e.key === 'Enter' && handleStartSession()}
           />
-          <button className="btn btn--primary session-sidebar__start-btn" onClick={onStartSession}>
+          <button className="btn btn--primary session-sidebar__start-btn" onClick={handleStartSession}>
             + New session
           </button>
         </div>
@@ -115,8 +122,7 @@ export function SessionSidebar({
                 )}
                 <div className="session-item__meta">{formatTimestamp(session.timestamp)}</div>
               </button>
-              {isActive && (
-                <button
+              <button
                   className="session-item__delete"
                   title="Delete session"
                   onClick={() => onDeleteSession(session)}
@@ -129,7 +135,6 @@ export function SessionSidebar({
                     <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
                   </svg>
                 </button>
-              )}
             </div>
           )
         })}
