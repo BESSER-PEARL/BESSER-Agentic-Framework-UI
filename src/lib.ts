@@ -4,9 +4,13 @@ import './App.css'
 
 // Components
 export { ChatArea } from './components/ChatArea'
+export { SessionSidebar } from './components/SessionSidebar'
 export { MessageBubble } from './components/MessageBubble'
 export { ReasoningTrace } from './components/ReasoningTrace'
 export { GUIRenderer } from './components/GUIRenderer'
+
+// DB types (type-only — safe for browser bundles)
+export type { SessionRecord } from './services/db'
 
 // WebSocket hook + types
 export { useWebSocket } from './hooks/useWebSocket'
